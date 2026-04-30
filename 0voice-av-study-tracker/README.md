@@ -58,6 +58,11 @@ If you want the app and nginx to be configured in one shot, use:
 bash scripts/deploy-full.sh
 ```
 
+This script supports two nginx exposure modes:
+
+- `EXPOSE_MODE=subdomain`: one host name per service
+- `EXPOSE_MODE=path`: one host name with multiple path prefixes
+
 You can override defaults when you run it:
 
 ```bash
@@ -104,6 +109,18 @@ If you already have a domain, pass it in when you run the script:
 DOMAIN=tracker.example.com bash scripts/deploy-full.sh
 ```
 
+If you want each project under a different path on the same domain or IP:
+
+```bash
+EXPOSE_MODE=path PATH_PREFIX=/tracker bash scripts/deploy-full.sh
+```
+
+If you want a shared domain plus a custom path:
+
+```bash
+DOMAIN=tools.example.com EXPOSE_MODE=path PATH_PREFIX=/tracker bash scripts/deploy-full.sh
+```
+
 The full deploy script will:
 
 - run `scripts/deploy.sh`
@@ -112,3 +129,19 @@ The full deploy script will:
 - enable the site and reload nginx
 
 After that, make sure your Alibaba Cloud security group allows `TCP/80`.
+
+### Recommended layouts for multiple services
+
+Different subdomains:
+
+```bash
+DOMAIN=tracker.example.com EXPOSE_MODE=subdomain bash scripts/deploy-full.sh
+DOMAIN=lab.example.com EXPOSE_MODE=subdomain bash scripts/deploy-full.sh
+```
+
+Different paths on one host:
+
+```bash
+DOMAIN=tools.example.com EXPOSE_MODE=path PATH_PREFIX=/tracker bash scripts/deploy-full.sh
+DOMAIN=tools.example.com EXPOSE_MODE=path PATH_PREFIX=/demo bash scripts/deploy-full.sh
+```

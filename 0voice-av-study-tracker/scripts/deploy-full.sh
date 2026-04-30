@@ -6,6 +6,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SITE_NAME="${SITE_NAME:-${APP_NAME}}"
 DOMAIN="${DOMAIN:-_}"
+EXPOSE_MODE="${EXPOSE_MODE:-subdomain}"
+PATH_PREFIX="${PATH_PREFIX:-/0voice-av-study-tracker}"
+PATH_GATEWAY_SITE="${PATH_GATEWAY_SITE:-ai-playground-paths}"
+PATH_INCLUDE_DIR="${PATH_INCLUDE_DIR:-/etc/nginx/ai-playground-paths.d}"
 
 log() {
   printf '[deploy-full] %s\n' "$*"
@@ -56,11 +60,30 @@ install_nginx_if_needed() {
   run_root_cmd apt-get install -y nginx
 }
 
-configure_nginx() {
+normalize_path_prefix() {
+  local prefix="$1"
+  if [[ -z "$prefix" || "$prefix" == "/" ]]; then
+    fail "PATH_PREFIX must not be empty or / when EXPOSE_MODE=path"
+  fi
+
+  if [[ "${prefix}" != /* ]]; then
+    prefix="/${prefix}"
+  fi
+
+  prefix="${prefix%/}"
+  printf '%s' "$prefix"
+}
+
+load_app_port() {
   local env_file="${PROJECT_DIR}/.env"
-  local app_port raw_port nginx_config
+  local raw_port
   raw_port="$(normalize_env_value "$(read_env_value PORT "$env_file")")"
-  app_port="${raw_port:-3000}"
+  printf '%s' "${raw_port:-3000}"
+}
+
+configure_nginx_subdomain() {
+  local app_port nginx_config
+  app_port="$(load_app_port)"
   nginx_config="/etc/nginx/sites-available/${SITE_NAME}"
 
   log "writing nginx config for ${DOMAIN} -> 127.0.0.1:${app_port}"
@@ -93,24 +116,101 @@ EOF
   fi
 }
 
+configure_nginx_path() {
+  local app_port prefix gateway_config snippet_config tmpfile
+  app_port="$(load_app_port)"
+  prefix="$(normalize_path_prefix "$PATH_PREFIX")"
+  gateway_config="/etc/nginx/sites-available/${PATH_GATEWAY_SITE}"
+  snippet_config="${PATH_INCLUDE_DIR}/${SITE_NAME}.conf"
+
+  log "writing nginx path mapping ${DOMAIN}${prefix}/ -> 127.0.0.1:${app_port}"
+  run_root_cmd mkdir -p "$PATH_INCLUDE_DIR"
+
+  tmpfile="$(mktemp)"
+  cat >"$tmpfile" <<EOF
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    include ${PATH_INCLUDE_DIR}/*.conf;
+}
+EOF
+  run_root_cmd cp "$tmpfile" "$gateway_config"
+
+  cat >"$tmpfile" <<EOF
+location = ${prefix} {
+    return 301 ${prefix}/;
+}
+
+location ${prefix}/ {
+    proxy_pass http://127.0.0.1:${app_port}/;
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+}
+EOF
+  run_root_cmd cp "$tmpfile" "$snippet_config"
+  rm -f "$tmpfile"
+
+  run_root_cmd ln -sf "$gateway_config" "/etc/nginx/sites-enabled/${PATH_GATEWAY_SITE}"
+  run_root_cmd rm -f /etc/nginx/sites-enabled/default
+  run_root_cmd nginx -t
+  run_root_cmd systemctl enable nginx
+  if ! run_root_cmd systemctl reload nginx; then
+    run_root_cmd systemctl restart nginx
+  fi
+}
+
+configure_nginx() {
+  case "$EXPOSE_MODE" in
+    subdomain)
+      configure_nginx_subdomain
+      ;;
+    path)
+      configure_nginx_path
+      ;;
+    *)
+      fail "EXPOSE_MODE must be subdomain or path"
+      ;;
+  esac
+}
+
 print_summary() {
-  local env_file="${PROJECT_DIR}/.env"
-  local raw_port app_port
-  raw_port="$(normalize_env_value "$(read_env_value PORT "$env_file")")"
-  app_port="${raw_port:-3000}"
+  local app_port browser_url shown_site_name
+  app_port="$(load_app_port)"
+  shown_site_name="${SITE_NAME}"
+  if [[ "$EXPOSE_MODE" == "path" ]]; then
+    local prefix
+    prefix="$(normalize_path_prefix "$PATH_PREFIX")"
+    shown_site_name="${PATH_GATEWAY_SITE}"
+    if [[ "${DOMAIN}" == "_" ]]; then
+      browser_url="http://your-server-ip${prefix}/"
+    else
+      browser_url="http://${DOMAIN}${prefix}/"
+    fi
+  else
+    if [[ "${DOMAIN}" == "_" ]]; then
+      browser_url="http://your-server-ip"
+    else
+      browser_url="http://${DOMAIN}"
+    fi
+  fi
   cat <<EOF
 
 [deploy-full] Done.
 [deploy-full] App dir      : ${PROJECT_DIR}
+[deploy-full] Expose mode  : ${EXPOSE_MODE}
 [deploy-full] Server name  : ${DOMAIN}
 [deploy-full] App port     : ${app_port}
-[deploy-full] Nginx site   : ${SITE_NAME}
+[deploy-full] Nginx site   : ${shown_site_name}
 
 [deploy-full] Check locally:
 curl --noproxy '*' http://127.0.0.1
 
 [deploy-full] Browser:
-http://$(if [[ "${DOMAIN}" == "_" ]]; then printf '%s' 'your-server-ip'; else printf '%s' "${DOMAIN}"; fi)
+${browser_url}
 
 [deploy-full] Remember:
 - open TCP/80 in your Alibaba Cloud security group
