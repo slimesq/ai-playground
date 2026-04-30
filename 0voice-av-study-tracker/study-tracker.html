@@ -1,0 +1,2457 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>音视频学习打卡</title>
+<style>
+:root {
+  --bg:#f5f8f7;
+  --surface:#ffffff;
+  --surface-2:#edf4f2;
+  --text:#14211f;
+  --muted:#5f6f6b;
+  --line:#d8e2de;
+  --green:#137a5b;
+  --cyan:#0f7894;
+  --red:#bd3f35;
+  --yellow:#94640d;
+  --coral:#c95b35;
+  --ink:#133e3b;
+  --shadow:0 14px 34px rgba(29,55,49,.12);
+}
+* { box-sizing:border-box; }
+body {
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+  background:
+    linear-gradient(180deg,#e6f0ed 0,#f5f8f7 360px,#f5f8f7 100%),
+    repeating-linear-gradient(90deg,rgba(19,122,91,.035) 0 1px,transparent 1px 46px);
+  color:var(--text);
+  line-height:1.5;
+}
+main { max-width:1160px; margin:0 auto; padding:30px 22px 46px; }
+header {
+  position:relative;
+  overflow:hidden;
+  display:grid;
+  gap:10px;
+  margin-bottom:18px;
+  padding:26px;
+  color:#fff;
+  background:linear-gradient(135deg,#153d3a 0,#1d705a 100%);
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:8px;
+  box-shadow:var(--shadow);
+}
+header::after {
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:4px;
+  background:linear-gradient(90deg,var(--green),var(--cyan),var(--coral),var(--yellow));
+}
+h1 {
+  margin:0;
+  font-size:32px;
+  line-height:1.2;
+  letter-spacing:0;
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+h1::before {
+  content:"";
+  width:12px;
+  height:34px;
+  border-radius:8px;
+  background:linear-gradient(180deg,#fff,#9bd4c3);
+}
+p { margin:0; }
+.subtitle { color:var(--muted); }
+header .subtitle { color:#d9ece7; }
+.notes { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.note {
+  border:1px solid rgba(255,255,255,.28);
+  background:rgba(255,255,255,.13);
+  border-radius:8px;
+  padding:7px 10px;
+  color:#f3fbf8;
+  font-size:13px;
+}
+.grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:18px 0 24px; }
+.stat {
+  position:relative;
+  overflow:hidden;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:8px;
+  min-height:92px;
+  padding:20px 18px 16px;
+  box-shadow:0 8px 22px rgba(30,54,48,.07);
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+.stat:hover { transform:translateY(-2px); border-color:#b9cbc6; box-shadow:0 12px 28px rgba(30,54,48,.1); }
+.stat::before { content:""; position:absolute; inset:0 auto 0 0; width:4px; background:var(--green); }
+.stat:nth-child(2)::before { background:var(--cyan); }
+.stat:nth-child(3)::before { background:var(--coral); }
+.stat:nth-child(4)::before { background:var(--yellow); }
+.stat strong { display:block; font-size:30px; line-height:1.05; margin-bottom:8px; }
+.stat span { color:var(--muted); font-size:13px; font-weight:600; }
+.dashboard {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:16px;
+  margin-bottom:10px;
+}
+.dashboard section {
+  min-height:224px;
+  padding:18px 18px 16px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:rgba(255,255,255,.88);
+  box-shadow:0 10px 26px rgba(30,54,48,.08);
+}
+.dashboard .section-head { margin-bottom:14px; }
+.dashboard .today-task,.progress-panel {
+  min-height:150px;
+  box-shadow:none;
+}
+.progress-panel {
+  padding:18px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  border:1px solid var(--line);
+  border-left:4px solid var(--green);
+  border-radius:8px;
+  background:linear-gradient(90deg,rgba(19,122,91,.06),#fff 34%);
+}
+.dashboard .progress-outer { height:26px; }
+.dashboard .progress-meta { margin-top:14px; }
+.dashboard .progress-percent { font-size:32px; }
+section {
+  padding:20px 0;
+  margin-bottom:6px;
+  border-top:1px solid var(--line);
+}
+.section-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+h2 { margin:0; font-size:18px; }
+.section-head h2 {
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.section-head h2::before {
+  content:"";
+  width:4px;
+  height:18px;
+  border-radius:8px;
+  background:var(--green);
+}
+select,button { font:inherit; }
+button,.file-label {
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--text);
+  border-radius:8px;
+  padding:8px 11px;
+  cursor:pointer;
+  box-shadow:0 4px 10px rgba(30,54,48,.05);
+  transition:transform .12s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease;
+}
+button:hover,.file-label:hover { border-color:var(--cyan); transform:translateY(-1px); box-shadow:0 8px 18px rgba(30,54,48,.1); }
+button:active,.file-label:active { transform:translateY(0) scale(.98); }
+button.primary { background:var(--ink); color:#fff; border-color:var(--ink); }
+button.primary:hover { background:var(--green); border-color:var(--green); }
+button.danger:hover { border-color:var(--red); color:var(--red); }
+select {
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--surface);
+  color:var(--text);
+  padding:9px 10px;
+  min-width:260px;
+  box-shadow:0 4px 10px rgba(30,54,48,.05);
+}
+.today-task,.task-row,.week-row,.milestone {
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--surface);
+  box-shadow:0 8px 20px rgba(30,54,48,.06);
+}
+.today-task {
+  min-height:124px;
+  padding:18px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  gap:11px;
+  border-left:4px solid var(--green);
+  background:linear-gradient(90deg,rgba(19,122,91,.06),#fff 34%);
+}
+.task-meta { display:flex; flex-wrap:wrap; gap:8px; color:var(--muted); font-size:13px; }
+.task-meta span {
+  display:inline-flex;
+  align-items:center;
+  min-height:24px;
+  padding:2px 8px;
+  border-radius:8px;
+  background:var(--surface-2);
+}
+.task-title { font-weight:700; font-size:16px; }
+.actions { display:flex; flex-wrap:wrap; gap:8px; }
+.progress-outer {
+  height:20px;
+  border-radius:8px;
+  background:var(--surface-2);
+  overflow:hidden;
+  border:1px solid var(--line);
+  box-shadow:inset 0 1px 2px rgba(30,54,48,.08);
+}
+.progress-inner {
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg,var(--green),var(--cyan),var(--coral));
+  transition:width .25s ease;
+}
+.progress-meta {
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  margin-top:9px;
+  flex-wrap:wrap;
+}
+.progress-percent {
+  color:var(--green);
+  font-size:24px;
+  font-weight:800;
+  line-height:1;
+  padding:3px 9px;
+  border-radius:8px;
+  background:#e8f4f0;
+}
+.progress-label { color:var(--muted); font-size:13px; }
+.task-list { display:grid; gap:9px; }
+.task-row {
+  display:grid;
+  grid-template-columns:52px minmax(150px,180px) minmax(0,1fr) auto;
+  gap:12px;
+  align-items:center;
+  min-height:62px;
+  padding:13px;
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+.task-row.is-done {
+  border-color:#abd2c5;
+  background:linear-gradient(90deg,rgba(19,122,91,.08),#fff 22%);
+}
+.check {
+  position:relative;
+  width:36px;
+  height:36px;
+  border-radius:8px;
+  border:1px solid #cbded8;
+  background:var(--surface-2);
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+  color:transparent;
+  line-height:1;
+  justify-self:center;
+  transition:transform .12s ease,background .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+.check:hover {
+  border-color:var(--green);
+  background:#e2f1ec;
+  box-shadow:0 6px 14px rgba(19,122,91,.14);
+}
+.check:active { transform:scale(.92); }
+.check:focus-visible {
+  outline:3px solid rgba(15,120,148,.24);
+  outline-offset:2px;
+}
+.check.done {
+  background:var(--green);
+  border-color:var(--green);
+  color:transparent;
+  box-shadow:0 8px 18px rgba(19,122,91,.22);
+}
+.check.done::after {
+  content:"";
+  position:absolute;
+  left:50%;
+  top:48%;
+  width:9px;
+  height:17px;
+  border:solid #fff;
+  border-width:0 3px 3px 0;
+  transform:translate(-50%,-56%) rotate(45deg);
+  transform-origin:center;
+}
+.track {
+  color:var(--muted);
+  font-size:13px;
+  font-weight:700;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  width:fit-content;
+  max-width:100%;
+  min-height:28px;
+  display:inline-flex;
+  align-items:center;
+  padding:3px 9px;
+  border:1px solid #d5e6e1;
+  border-radius:8px;
+  background:#ebf5f2;
+}
+.track.ls { color:var(--cyan); background:#e8f4f6; border-color:#d0e4e8; }
+.track.ydy { color:var(--yellow); background:#f8f0df; border-color:#ecd9ae; }
+.duration {
+  color:var(--muted);
+  font-size:13px;
+  text-align:right;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  max-width:190px;
+  font-weight:600;
+}
+.duration-date { color:var(--text); font-weight:700; }
+.duration-sub { color:var(--muted); font-size:12px; margin-top:4px; }
+.task-row > div:nth-child(3) { min-width:0; overflow-wrap:anywhere; }
+.week-list { display:grid; gap:9px; }
+.week-row {
+  min-height:74px;
+  padding:14px;
+  display:grid;
+  grid-template-columns:82px 126px minmax(0,1fr) auto;
+  gap:14px;
+  align-items:center;
+  cursor:pointer;
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+.week-row:hover,.task-row:hover,.milestone:hover { border-color:#b7cac3; transform:translateY(-1px); box-shadow:0 12px 28px rgba(30,54,48,.09); }
+.week-row:active { transform:translateY(0) scale(.992); border-color:var(--green); }
+.week-row.current { border-color:var(--cyan); box-shadow:inset 4px 0 0 var(--cyan),0 8px 20px rgba(30,54,48,.06); }
+.week-row.selected {
+  border-color:var(--green);
+  background:linear-gradient(90deg,rgba(19,122,91,.08),#fff 28%);
+  box-shadow:inset 4px 0 0 var(--green),0 12px 28px rgba(30,54,48,.1);
+}
+.week-row.selected .week-title { color:var(--green); }
+.week-row.done { box-shadow:inset 4px 0 0 var(--green),0 8px 20px rgba(30,54,48,.06); }
+.week-title { font-weight:800; }
+.week-range,.week-count { color:var(--muted); font-size:13px; }
+.week-row > div:nth-child(3) > div:first-child { font-weight:700; }
+.pills { display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
+.week-row > div:nth-child(3) { min-width:0; overflow-wrap:anywhere; }
+.week-row .pills { min-width:148px; }
+.pill { width:15px; height:15px; border-radius:8px; border:1px solid var(--line); background:var(--surface-2); }
+.pill.done { background:var(--green); border-color:var(--green); }
+.pill.today { outline:2px solid var(--cyan); outline-offset:1px; }
+.milestones { display:grid; gap:8px; }
+.milestone {
+  display:grid;
+  grid-template-columns:128px 1fr;
+  gap:10px;
+  padding:12px 14px;
+  border-left:4px solid #d8e2de;
+}
+.milestone time { color:var(--green); font-weight:700; }
+.milestone:hover { border-left-color:var(--green); }
+.data-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.data-hint {
+  margin:10px 0 0;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.5;
+}
+.hidden { display:none; }
+.empty {
+  color:var(--muted);
+  padding:18px;
+  border:1px dashed var(--line);
+  border-radius:8px;
+  background:rgba(255,255,255,.62);
+}
+@media (max-width:780px) {
+  main { padding:14px; }
+  header { padding:18px; }
+  h1 { font-size:26px; }
+  .grid { grid-template-columns:repeat(2,1fr); }
+  .dashboard { grid-template-columns:1fr; }
+  .dashboard section { min-height:auto; }
+  .section-head { align-items:stretch; flex-direction:column; }
+  select { min-width:100%; }
+  .task-row {
+    grid-template-columns:42px minmax(0,1fr);
+    grid-template-areas:
+      "check meta"
+      "title title"
+      "duration duration";
+    align-items:start;
+  }
+  .task-row .check { grid-area:check; margin-top:0; justify-self:start; }
+  .task-row .track { grid-area:meta; white-space:normal; line-height:1.4; }
+  .task-row > div:nth-child(3) { grid-area:title; }
+  .task-row .duration { grid-area:duration; max-width:none; text-align:left; white-space:normal; }
+  .week-row { grid-template-columns:1fr; }
+  .pills { justify-content:flex-start; }
+  .milestone { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<main>
+<header><h1 id="pageTitle"></h1></header>
+<div class="grid"><div class="stat"><strong id="doneDays">0</strong><span>已完成任务</span></div><div class="stat"><strong id="totalDays">0</strong><span>总任务数</span></div><div class="stat"><strong id="currentWeek">-</strong><span>当前周次</span></div><div class="stat"><strong id="progressPct">0%</strong><span>总进度</span></div></div>
+<div class="dashboard"><section><div class="section-head"><h2>今天</h2><span class="subtitle" id="todayDate"></span></div><div id="todayBox"></div></section><section><div class="section-head"><h2>总体进度</h2></div><div class="progress-panel"><div class="progress-outer"><div class="progress-inner" id="progressBar"></div></div><div class="progress-meta"><strong class="progress-percent" id="progressPercentText">0%</strong></div></div></section></div>
+<section><div class="section-head"><h2>周详情</h2><select id="weekSelect"></select></div><div class="task-list" id="weekTasks"></div></section>
+<section><div class="section-head"><h2>周历</h2><span class="subtitle">点击周次可切换详情</span></div><div class="week-list" id="weekList"></div></section>
+<section><div class="section-head"><h2>关键里程碑</h2></div><div class="milestones" id="milestones"></div></section>
+<section><div class="section-head"><h2>数据</h2><span class="subtitle" id="syncStatus">正在检查同步状态...</span></div><div class="data-actions"><button id="syncBtn">立即同步</button><button id="setKeyBtn">设置同步口令</button><button id="exportBtn">导出备份</button><label class="file-label">导入备份<input class="hidden" id="importFile" type="file" accept="application/json"></label><button class="danger" id="resetBtn">清空打卡</button></div><p class="data-hint" id="syncHint">当前支持本地缓存 + 服务端同步，多设备可以共用同一份打卡记录。</p></section>
+</main>
+<script>
+const DATA = {
+    "source": "音视频学习进度表-按课程排期.md",
+    "generatedAt": "2026-04-23",
+    "title": "音视频学习打卡",
+    "subtitle": "",
+    "weeks": [
+        {
+            "week": 1,
+            "start": "2026-05-04",
+            "end": "2026-05-10",
+            "range": "05/04 - 05/10",
+            "totalMin": 268,
+            "theme": "FFmpeg解封装/解码",
+            "tasks": [
+                {
+                    "id": "w01-周一-ls",
+                    "week": 1,
+                    "date": "2026-05-04",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "55-FLV解复用实战(上)（已完成）",
+                    "duration": "39min"
+                },
+                {
+                    "id": "w01-周二-ls",
+                    "week": 1,
+                    "date": "2026-05-05",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "55-FLV解复用实战(下)（已完成）",
+                    "duration": "39min"
+                },
+                {
+                    "id": "w01-周三-ls",
+                    "week": 1,
+                    "date": "2026-05-06",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "56-音频解码实战 + 57-视频解码实战（已完成）",
+                    "duration": "37+16=53min"
+                },
+                {
+                    "id": "w01-周四-ls",
+                    "week": 1,
+                    "date": "2026-05-07",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "58_1-MP4封装格式剖析(上) + 58_1-MP4封装格式剖析(下)",
+                    "duration": "34+34=68min"
+                },
+                {
+                    "id": "w01-周五-ls",
+                    "week": 1,
+                    "date": "2026-05-08",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "59-2-MP4解封装(上) + 59-2-MP4解封装(下)",
+                    "duration": "35+34=69min"
+                },
+                {
+                    "id": "w01-周六-ydy",
+                    "week": 1,
+                    "date": "2026-05-09",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "远控 20%",
+                    "duration": ""
+                },
+                {
+                    "id": "w01-周日-ydy",
+                    "week": 1,
+                    "date": "2026-05-10",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "远控 40%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 2,
+            "start": "2026-05-11",
+            "end": "2026-05-17",
+            "range": "05/11 - 05/17",
+            "totalMin": 268,
+            "theme": "FFmpeg解封装/解码",
+            "tasks": [
+                {
+                    "id": "w02-周一-ls",
+                    "week": 2,
+                    "date": "2026-05-11",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "60-AVIO内存输入模式(上) + 60-AVIO内存输入模式(下)",
+                    "duration": "36+36=72min"
+                },
+                {
+                    "id": "w02-周二-ls",
+                    "week": 2,
+                    "date": "2026-05-12",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "61-音频处理基本概念及音频重采样(上)",
+                    "duration": "39min"
+                },
+                {
+                    "id": "w02-周三-ls",
+                    "week": 2,
+                    "date": "2026-05-13",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "61-音频处理基本概念及音频重采样(下)",
+                    "duration": "38min"
+                },
+                {
+                    "id": "w02-周四-ls",
+                    "week": 2,
+                    "date": "2026-05-14",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "62-音频处理基本概念及音频重采样(上) + 62-音频处理基本概念及音频重采样(下)",
+                    "duration": "37+36=73min"
+                },
+                {
+                    "id": "w02-周五-ls",
+                    "week": 2,
+                    "date": "2026-05-15",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "63-音频编码实战",
+                    "duration": "46min"
+                },
+                {
+                    "id": "w02-周六-ydy",
+                    "week": 2,
+                    "date": "2026-05-16",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "远控 60%",
+                    "duration": ""
+                },
+                {
+                    "id": "w02-周日-ydy",
+                    "week": 2,
+                    "date": "2026-05-17",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "远控 80%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 3,
+            "start": "2026-05-18",
+            "end": "2026-05-24",
+            "range": "05/18 - 05/24",
+            "totalMin": 248,
+            "theme": "FFmpeg编码/封装/过滤器",
+            "tasks": [
+                {
+                    "id": "w03-周一-ls",
+                    "week": 3,
+                    "date": "2026-05-18",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "64-H264编码原理详解(上) + 64-H264编码原理详解(下)",
+                    "duration": "36+36=72min"
+                },
+                {
+                    "id": "w03-周二-ls",
+                    "week": 3,
+                    "date": "2026-05-19",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "65-视频编码实战",
+                    "duration": "41min"
+                },
+                {
+                    "id": "w03-周三-ls",
+                    "week": 3,
+                    "date": "2026-05-20",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "66-音视频H264和AAC合成FLV实战(ffmepg4.2版本)(上)",
+                    "duration": "39min"
+                },
+                {
+                    "id": "w03-周四-ls",
+                    "week": 3,
+                    "date": "2026-05-21",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "66-音视频H264和AAC合成FLV实战(ffmepg4.2版本)(下)",
+                    "duration": "38min"
+                },
+                {
+                    "id": "w03-周五-ls",
+                    "week": 3,
+                    "date": "2026-05-22",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "66-音视频H264和AAC合成FLV实战(ffmpeg6.0版本)(上)",
+                    "duration": "58min"
+                },
+                {
+                    "id": "w03-周六-ydy",
+                    "week": 3,
+                    "date": "2026-05-23",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "远控 100% ✅",
+                    "duration": ""
+                },
+                {
+                    "id": "w03-周日-ydy",
+                    "week": 3,
+                    "date": "2026-05-24",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "远控 100% ✅",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 4,
+            "start": "2026-05-25",
+            "end": "2026-05-31",
+            "range": "05/25 - 05/31",
+            "totalMin": 253,
+            "theme": "FFmpeg编码/封装/过滤器",
+            "tasks": [
+                {
+                    "id": "w04-周一-ls",
+                    "week": 4,
+                    "date": "2026-05-25",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "66-音视频H264和AAC合成FLV实战(ffmpeg6.0版本)(下)",
+                    "duration": "58min"
+                },
+                {
+                    "id": "w04-周二-ls",
+                    "week": 4,
+                    "date": "2026-05-26",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "67_MP4合成实战1-框架分析 + 68_MP4合成实战2-muxer实现",
+                    "duration": "12+43=55min"
+                },
+                {
+                    "id": "w04-周三-ls",
+                    "week": 4,
+                    "date": "2026-05-27",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "69_MP4合成实战3-音视频编码实现",
+                    "duration": "44min"
+                },
+                {
+                    "id": "w04-周四-ls",
+                    "week": 4,
+                    "date": "2026-05-28",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "70_MP4合成实战4-合成mp4(上)",
+                    "duration": "48min"
+                },
+                {
+                    "id": "w04-周五-ls",
+                    "week": 4,
+                    "date": "2026-05-29",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "70_MP4合成实战4-合成mp4(下)",
+                    "duration": "48min"
+                },
+                {
+                    "id": "w04-周六-ydy",
+                    "week": 4,
+                    "date": "2026-05-30",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "易播Linux服务端 10%",
+                    "duration": ""
+                },
+                {
+                    "id": "w04-周日-ydy",
+                    "week": 4,
+                    "date": "2026-05-31",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "易播Linux服务端 20%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 5,
+            "start": "2026-06-01",
+            "end": "2026-06-07",
+            "range": "06/01 - 06/07",
+            "totalMin": 252,
+            "theme": "FFmpeg编码/封装/过滤器",
+            "tasks": [
+                {
+                    "id": "w05-周一-ls",
+                    "week": 5,
+                    "date": "2026-06-01",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "71_MP4合成实战5-优化",
+                    "duration": "52min"
+                },
+                {
+                    "id": "w05-周二-ls",
+                    "week": 5,
+                    "date": "2026-06-02",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "01-H265-NALU分析和解码 + 02-H265编码实践",
+                    "duration": "15+27=42min"
+                },
+                {
+                    "id": "w05-周三-ls",
+                    "week": 5,
+                    "date": "2026-06-03",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "03-nvdia硬件编码H264 + 04-ffmpeg硬件解码",
+                    "duration": "23+42=65min"
+                },
+                {
+                    "id": "w05-周四-ls",
+                    "week": 5,
+                    "date": "2026-06-04",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "05-FFmpeg两路音视频混流实现-音频混流",
+                    "duration": "60min"
+                },
+                {
+                    "id": "w05-周五-ls",
+                    "week": 5,
+                    "date": "2026-06-05",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "73-FFmpeg过滤器框架分析 + 74-视频过滤器实战",
+                    "duration": "12+21=33min"
+                },
+                {
+                    "id": "w05-周六-ydy",
+                    "week": 5,
+                    "date": "2026-06-06",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "易播Linux服务端 30%",
+                    "duration": ""
+                },
+                {
+                    "id": "w05-周日-ydy",
+                    "week": 5,
+                    "date": "2026-06-07",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "易播Linux服务端 40%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 6,
+            "start": "2026-06-08",
+            "end": "2026-06-14",
+            "range": "06/08 - 06/14",
+            "totalMin": 269,
+            "theme": "FFmpeg编码/封装/过滤器",
+            "tasks": [
+                {
+                    "id": "w06-周一-ls",
+                    "week": 6,
+                    "date": "2026-06-08",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "75-音频过滤器实战",
+                    "duration": "39min"
+                },
+                {
+                    "id": "w06-周二-ls",
+                    "week": 6,
+                    "date": "2026-06-09",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "76-FFmpeg filter补充讲解 + 77-ffplay.c意义 + 78-ffplay框架分析",
+                    "duration": "45+5+16=66min"
+                },
+                {
+                    "id": "w06-周三-ls",
+                    "week": 6,
+                    "date": "2026-06-10",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "79-ffplay数据结构分析(上) + 79-ffplay数据结构分析(下)",
+                    "duration": "38+38=76min"
+                },
+                {
+                    "id": "w06-周四-ls",
+                    "week": 6,
+                    "date": "2026-06-11",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "80-ffplay数据读取线程(上)",
+                    "duration": "44min"
+                },
+                {
+                    "id": "w06-周五-ls",
+                    "week": 6,
+                    "date": "2026-06-12",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "80-ffplay数据读取线程(中)",
+                    "duration": "44min"
+                },
+                {
+                    "id": "w06-周六-ydy",
+                    "week": 6,
+                    "date": "2026-06-13",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "易播Linux服务端 50%",
+                    "duration": ""
+                },
+                {
+                    "id": "w06-周日-ydy",
+                    "week": 6,
+                    "date": "2026-06-14",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "易播Linux服务端 60%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 7,
+            "start": "2026-06-15",
+            "end": "2026-06-21",
+            "range": "06/15 - 06/21",
+            "totalMin": 245,
+            "theme": "ffplay播放器",
+            "tasks": [
+                {
+                    "id": "w07-周一-ls",
+                    "week": 7,
+                    "date": "2026-06-15",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "80-ffplay数据读取线程(下)",
+                    "duration": "43min"
+                },
+                {
+                    "id": "w07-周二-ls",
+                    "week": 7,
+                    "date": "2026-06-16",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "81-ffplay视频解码线程",
+                    "duration": "57min"
+                },
+                {
+                    "id": "w07-周三-ls",
+                    "week": 7,
+                    "date": "2026-06-17",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "82-ffplay音频解码线程",
+                    "duration": "21min"
+                },
+                {
+                    "id": "w07-周四-ls",
+                    "week": 7,
+                    "date": "2026-06-18",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "83-ffplay音频输出模块",
+                    "duration": "60min"
+                },
+                {
+                    "id": "w07-周五-ls",
+                    "week": 7,
+                    "date": "2026-06-19",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "84-ffplay重采样 + 85-视频输出和尺寸变换(上)",
+                    "duration": "17+47=64min"
+                },
+                {
+                    "id": "w07-周六-ydy",
+                    "week": 7,
+                    "date": "2026-06-20",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "易播Linux服务端 70%",
+                    "duration": ""
+                },
+                {
+                    "id": "w07-周日-ydy",
+                    "week": 7,
+                    "date": "2026-06-21",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "易播Linux服务端 80%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 8,
+            "start": "2026-06-22",
+            "end": "2026-06-28",
+            "range": "06/22 - 06/28",
+            "totalMin": 250,
+            "theme": "ffplay播放器",
+            "tasks": [
+                {
+                    "id": "w08-周一-ls",
+                    "week": 8,
+                    "date": "2026-06-22",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "85-视频输出和尺寸变换(下) + 86-ffplay图像格式转换",
+                    "duration": "47+6=53min"
+                },
+                {
+                    "id": "w08-周二-ls",
+                    "week": 8,
+                    "date": "2026-06-23",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "87-音视频同步基础",
+                    "duration": "49min"
+                },
+                {
+                    "id": "w08-周三-ls",
+                    "week": 8,
+                    "date": "2026-06-24",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "88-ffplay播放器-音视频为基准(上) + 88-ffplay播放器-音视频为基准(下)",
+                    "duration": "32+31=63min"
+                },
+                {
+                    "id": "w08-周四-ls",
+                    "week": 8,
+                    "date": "2026-06-25",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "89-ffplay播放器-以视频为基准",
+                    "duration": "35min"
+                },
+                {
+                    "id": "w08-周五-ls",
+                    "week": 8,
+                    "date": "2026-06-26",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "90-ffplay播放器-外部为基准 + 91-ffplay-播放暂停",
+                    "duration": "15+35=50min"
+                },
+                {
+                    "id": "w08-周六-ydy",
+                    "week": 8,
+                    "date": "2026-06-27",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "易播Linux服务端 90%",
+                    "duration": ""
+                },
+                {
+                    "id": "w08-周日-ydy",
+                    "week": 8,
+                    "date": "2026-06-28",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "易播Linux服务端 100%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 9,
+            "start": "2026-06-29",
+            "end": "2026-07-05",
+            "range": "06/29 - 07/05",
+            "totalMin": 256,
+            "theme": "ffplay播放器",
+            "tasks": [
+                {
+                    "id": "w09-周一-ls",
+                    "week": 9,
+                    "date": "2026-06-29",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "92-ffplay-帧、调音量、静音 + 93-ffplay播放器-快进快退seek + 94-ffplay播放器-总结",
+                    "duration": "10+36+5=51min"
+                },
+                {
+                    "id": "w09-周二-ls",
+                    "week": 9,
+                    "date": "2026-06-30",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "122-RTMP流媒体服务器搭建 + 123-RTMP协议剖析(上)",
+                    "duration": "28+44=72min"
+                },
+                {
+                    "id": "w09-周三-ls",
+                    "week": 9,
+                    "date": "2026-07-01",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "123-RTMP协议剖析(中)",
+                    "duration": "44min"
+                },
+                {
+                    "id": "w09-周四-ls",
+                    "week": 9,
+                    "date": "2026-07-02",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "123-RTMP协议剖析(下)",
+                    "duration": "43min"
+                },
+                {
+                    "id": "w09-周五-ls",
+                    "week": 9,
+                    "date": "2026-07-03",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "124-RTMP推流实战(上)",
+                    "duration": "46min"
+                },
+                {
+                    "id": "w09-周六-ydy",
+                    "week": 9,
+                    "date": "2026-07-04",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 8%",
+                    "duration": ""
+                },
+                {
+                    "id": "w09-周日-ydy",
+                    "week": 9,
+                    "date": "2026-07-05",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 16%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 10,
+            "start": "2026-07-06",
+            "end": "2026-07-12",
+            "range": "07/06 - 07/12",
+            "totalMin": 259,
+            "theme": "RTMP/HLS/gdb",
+            "tasks": [
+                {
+                    "id": "w10-周一-ls",
+                    "week": 10,
+                    "date": "2026-07-06",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "124-RTMP推流实战(中)",
+                    "duration": "45min"
+                },
+                {
+                    "id": "w10-周二-ls",
+                    "week": 10,
+                    "date": "2026-07-07",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "124-RTMP推流实战(下)",
+                    "duration": "45min"
+                },
+                {
+                    "id": "w10-周三-ls",
+                    "week": 10,
+                    "date": "2026-07-08",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "125-RTMP拉流实战(上)",
+                    "duration": "51min"
+                },
+                {
+                    "id": "w10-周四-ls",
+                    "week": 10,
+                    "date": "2026-07-09",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "125-RTMP拉流实战(中)",
+                    "duration": "51min"
+                },
+                {
+                    "id": "w10-周五-ls",
+                    "week": 10,
+                    "date": "2026-07-10",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "125-RTMP拉流实战(下) + 屏幕录制+推流项目框架讲解",
+                    "duration": "50+17=67min"
+                },
+                {
+                    "id": "w10-周六-ydy",
+                    "week": 10,
+                    "date": "2026-07-11",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 24%",
+                    "duration": ""
+                },
+                {
+                    "id": "w10-周日-ydy",
+                    "week": 10,
+                    "date": "2026-07-12",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 32%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 11,
+            "start": "2026-07-13",
+            "end": "2026-07-19",
+            "range": "07/13 - 07/19",
+            "totalMin": 268,
+            "theme": "RTMP/HLS/gdb",
+            "tasks": [
+                {
+                    "id": "w11-周一-ls",
+                    "week": 11,
+                    "date": "2026-07-13",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "126- HLS流媒体服务器配置 + 127 HLS框架分析",
+                    "duration": "29+26=55min"
+                },
+                {
+                    "id": "w11-周二-ls",
+                    "week": 11,
+                    "date": "2026-07-14",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "128- m3u8协议详解 + 129-TS协议解析",
+                    "duration": "9+35=44min"
+                },
+                {
+                    "id": "w11-周三-ls",
+                    "week": 11,
+                    "date": "2026-07-15",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "130-HLS抓包分析5 + 131-HTTP协议分析",
+                    "duration": "23+23=46min"
+                },
+                {
+                    "id": "w11-周四-ls",
+                    "week": 11,
+                    "date": "2026-07-16",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "132- hls拉流源码分析1(上) + 132- hls拉流源码分析1(下)",
+                    "duration": "35+34=69min"
+                },
+                {
+                    "id": "w11-周五-ls",
+                    "week": 11,
+                    "date": "2026-07-17",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "133- hls拉流源码分析2",
+                    "duration": "54min"
+                },
+                {
+                    "id": "w11-周六-ydy",
+                    "week": 11,
+                    "date": "2026-07-18",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 40%",
+                    "duration": ""
+                },
+                {
+                    "id": "w11-周日-ydy",
+                    "week": 11,
+                    "date": "2026-07-19",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 48%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 12,
+            "start": "2026-07-20",
+            "end": "2026-07-26",
+            "range": "07/20 - 07/26",
+            "totalMin": 255,
+            "theme": "RTMP/HLS/gdb",
+            "tasks": [
+                {
+                    "id": "w12-周一-ls",
+                    "week": 12,
+                    "date": "2026-07-20",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "133（补充） nginx-hls-多码率测试环境搭建",
+                    "duration": "57min"
+                },
+                {
+                    "id": "w12-周二-ls",
+                    "week": 12,
+                    "date": "2026-07-21",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "133（补充） TS协议补充",
+                    "duration": "25min"
+                },
+                {
+                    "id": "w12-周三-ls",
+                    "week": 12,
+                    "date": "2026-07-22",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "134-gdb【扩展了解用】(上)",
+                    "duration": "53min"
+                },
+                {
+                    "id": "w12-周四-ls",
+                    "week": 12,
+                    "date": "2026-07-23",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "134-gdb【扩展了解用】(下) + 什么是WebRTC + WebRTC框架",
+                    "duration": "52+3+5=60min"
+                },
+                {
+                    "id": "w12-周五-ls",
+                    "week": 12,
+                    "date": "2026-07-24",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "WebRTC发展前景+国内方案商 +  WebRTC通话原理1-STUN + WebRTC通话原理2-TURN + WebRTC通话原理3-信令服务器 + WebRTC通话原理4-一对一通话-补充",
+                    "duration": "6+21+7+9+17=60min"
+                },
+                {
+                    "id": "w12-周六-ydy",
+                    "week": 12,
+                    "date": "2026-07-25",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 56%",
+                    "duration": ""
+                },
+                {
+                    "id": "w12-周日-ydy",
+                    "week": 12,
+                    "date": "2026-07-26",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 64%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 13,
+            "start": "2026-07-27",
+            "end": "2026-08-02",
+            "range": "07/27 - 08/02",
+            "totalMin": 263,
+            "theme": "WebRTC一对一通话",
+            "tasks": [
+                {
+                    "id": "w13-周一-ls",
+                    "week": 13,
+                    "date": "2026-07-27",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "vscode安装和测试 + nodejs安装和测试 + coturn安装 + coturn服务器测试 + 课程收获 + 打开摄像头(上) + 打开摄像头(下)",
+                    "duration": "9+10+3+6+1+15+4=48min"
+                },
+                {
+                    "id": "w13-周二-ls",
+                    "week": 13,
+                    "date": "2026-07-28",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "打开麦克风 + 打开摄像头+麦克风 + Web端websocket + Nodejs服务器 websocket + websocket聊天室实战1-框架分析 + 拓展讲解 + websocket聊天室实战2-客户端",
+                    "duration": "9+3+10+8+6+7+8=51min"
+                },
+                {
+                    "id": "w13-周三-ls",
+                    "week": 13,
+                    "date": "2026-07-29",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "websocket聊天室实战3-服务端 + js知识补充 + 信令服务器map实战 + 一对一通话原理",
+                    "duration": "12+9+12+24=57min"
+                },
+                {
+                    "id": "w13-周四-ls",
+                    "week": 13,
+                    "date": "2026-07-30",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "信令协议设计 + RTCPeerConnection补充",
+                    "duration": "38+7=45min"
+                },
+                {
+                    "id": "w13-周五-ls",
+                    "week": 13,
+                    "date": "2026-07-31",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "页面设计和打开摄像头 + websocket连接 + leave和peer-leave信令实现",
+                    "duration": "21+22+19=62min"
+                },
+                {
+                    "id": "w13-周六-ydy",
+                    "week": 13,
+                    "date": "2026-08-01",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 72%",
+                    "duration": ""
+                },
+                {
+                    "id": "w13-周日-ydy",
+                    "week": 13,
+                    "date": "2026-08-02",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 80%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 14,
+            "start": "2026-08-03",
+            "end": "2026-08-09",
+            "range": "08/03 - 08/09",
+            "totalMin": 272,
+            "theme": "WebRTC一对一通话",
+            "tasks": [
+                {
+                    "id": "w14-周一-ls",
+                    "week": 14,
+                    "date": "2026-08-03",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "join_new-peer_signal + WebRTC API讲解",
+                    "duration": "43+11=54min"
+                },
+                {
+                    "id": "w14-周二-ls",
+                    "week": 14,
+                    "date": "2026-08-04",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "offer_answer(上) + offer_answer(下)",
+                    "duration": "31+30=61min"
+                },
+                {
+                    "id": "w14-周三-ls",
+                    "week": 14,
+                    "date": "2026-08-05",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "综合调试和完善",
+                    "duration": "54min"
+                },
+                {
+                    "id": "w14-周四-ls",
+                    "week": 14,
+                    "date": "2026-08-06",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "部署到公网（上） +  部署到公网（下） + 部署到公网（补充） + Android获取权限和引入库",
+                    "duration": "31+8+4+4=47min"
+                },
+                {
+                    "id": "w14-周五-ls",
+                    "week": 14,
+                    "date": "2026-08-07",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "Android信令处理 + Android WebRTC框架分析",
+                    "duration": "15+41=56min"
+                },
+                {
+                    "id": "w14-周六-ydy",
+                    "week": 14,
+                    "date": "2026-08-08",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 88%",
+                    "duration": ""
+                },
+                {
+                    "id": "w14-周日-ydy",
+                    "week": 14,
+                    "date": "2026-08-09",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 96%",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 15,
+            "start": "2026-08-10",
+            "end": "2026-08-16",
+            "range": "08/10 - 08/16",
+            "totalMin": 264,
+            "theme": "WebRTC MESH/C++ Native",
+            "tasks": [
+                {
+                    "id": "w15-周一-ls",
+                    "week": 15,
+                    "date": "2026-08-10",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "Android实战-走读代码 + Web和Android通话总结 + 230-WebRTC音视频通话1-20200312(上)",
+                    "duration": "22+13+45=80min"
+                },
+                {
+                    "id": "w15-周二-ls",
+                    "week": 15,
+                    "date": "2026-08-11",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "230-WebRTC音视频通话1-20200312(中)",
+                    "duration": "44min"
+                },
+                {
+                    "id": "w15-周三-ls",
+                    "week": 15,
+                    "date": "2026-08-12",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "230-WebRTC音视频通话1-20200312(下)",
+                    "duration": "44min"
+                },
+                {
+                    "id": "w15-周四-ls",
+                    "week": 15,
+                    "date": "2026-08-13",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "231-WebRTC音视频通话2-20200317(上)",
+                    "duration": "48min"
+                },
+                {
+                    "id": "w15-周五-ls",
+                    "week": 15,
+                    "date": "2026-08-14",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "231-WebRTC音视频通话2-20200317(中)",
+                    "duration": "48min"
+                },
+                {
+                    "id": "w15-周六-ydy",
+                    "week": 15,
+                    "date": "2026-08-15",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 100% ✅",
+                    "duration": ""
+                },
+                {
+                    "id": "w15-周日-ydy",
+                    "week": 15,
+                    "date": "2026-08-16",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "云助教 100% ✅",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 16,
+            "start": "2026-08-17",
+            "end": "2026-08-23",
+            "range": "08/17 - 08/23",
+            "totalMin": 250,
+            "theme": "WebRTC MESH/C++ Native",
+            "tasks": [
+                {
+                    "id": "w16-周一-ls",
+                    "week": 16,
+                    "date": "2026-08-17",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "231-WebRTC音视频通话2-20200317(下)",
+                    "duration": "48min"
+                },
+                {
+                    "id": "w16-周二-ls",
+                    "week": 16,
+                    "date": "2026-08-18",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "232-WebRTC音视频通话3-20200320(上)",
+                    "duration": "48min"
+                },
+                {
+                    "id": "w16-周三-ls",
+                    "week": 16,
+                    "date": "2026-08-19",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "232-WebRTC音视频通话3-20200320(中)",
+                    "duration": "48min"
+                },
+                {
+                    "id": "w16-周四-ls",
+                    "week": 16,
+                    "date": "2026-08-20",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "232-WebRTC音视频通话3-20200320(下)",
+                    "duration": "47min"
+                },
+                {
+                    "id": "w16-周五-ls",
+                    "week": 16,
+                    "date": "2026-08-21",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "233-WebRTC音视频通话4-Mesh多人通话项目部署",
+                    "duration": "59min"
+                },
+                {
+                    "id": "w16-周六-ydy",
+                    "week": 16,
+                    "date": "2026-08-22",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目预研：需求拆解 + 架构草图",
+                    "duration": ""
+                },
+                {
+                    "id": "w16-周日-ydy",
+                    "week": 16,
+                    "date": "2026-08-23",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目预研：信令服务器接口设计",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 17,
+            "start": "2026-08-24",
+            "end": "2026-08-30",
+            "range": "08/24 - 08/30",
+            "totalMin": 281,
+            "theme": "WebRTC MESH/C++ Native",
+            "tasks": [
+                {
+                    "id": "w17-周一-ls",
+                    "week": 17,
+                    "date": "2026-08-24",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "234-快播核心技术揭秘 P2P框架的实现(1)(上) + 234-快播核心技术揭秘 P2P框架的实现(1)(下)",
+                    "duration": "32+31=63min"
+                },
+                {
+                    "id": "w17-周二-ls",
+                    "week": 17,
+                    "date": "2026-08-25",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "235-快播核心技术揭秘 P2P框架的实现(2)",
+                    "duration": "59min"
+                },
+                {
+                    "id": "w17-周三-ls",
+                    "week": 17,
+                    "date": "2026-08-26",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "1-WebRTC C++Native编译源码 + 2-WebRTC-peerconnection客户端(上)",
+                    "duration": "28+38=66min"
+                },
+                {
+                    "id": "w17-周四-ls",
+                    "week": 17,
+                    "date": "2026-08-27",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "2-WebRTC-peerconnection客户端(下)",
+                    "duration": "38min"
+                },
+                {
+                    "id": "w17-周五-ls",
+                    "week": 17,
+                    "date": "2026-08-28",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "3-WebRTC C++视频采集逻辑分析 + 4-WebRTC C++视频渲染",
+                    "duration": "36+19=55min"
+                },
+                {
+                    "id": "w17-周六-ydy",
+                    "week": 17,
+                    "date": "2026-08-29",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目原型：房间管理 + offer/answer 流程",
+                    "duration": ""
+                },
+                {
+                    "id": "w17-周日-ydy",
+                    "week": 17,
+                    "date": "2026-08-30",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目原型：WebRTC MESH demo 复现",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 18,
+            "start": "2026-08-31",
+            "end": "2026-09-06",
+            "range": "08/31 - 09/06",
+            "totalMin": 272,
+            "theme": "SRS RTMP/HLS/FLV",
+            "tasks": [
+                {
+                    "id": "w18-周一-ls",
+                    "week": 18,
+                    "date": "2026-08-31",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "136-SRS流媒体服务器开发概述",
+                    "duration": "46min"
+                },
+                {
+                    "id": "w18-周二-ls",
+                    "week": 18,
+                    "date": "2026-09-01",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "137-SRS流媒体框架入门(上) + 137-SRS流媒体框架入门(下)",
+                    "duration": "33+33=66min"
+                },
+                {
+                    "id": "w18-周三-ls",
+                    "week": 18,
+                    "date": "2026-09-02",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "138-SRS流媒体服务器-推流框架分析(上) + 138-SRS流媒体服务器-推流框架分析(下)",
+                    "duration": "31+31=62min"
+                },
+                {
+                    "id": "w18-周四-ls",
+                    "week": 18,
+                    "date": "2026-09-03",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "139-SRS流媒体服务器-RTMP拉流框架分析 + 140-SRS流媒体服务器-RTMP协议(上)",
+                    "duration": "31+34=65min"
+                },
+                {
+                    "id": "w18-周五-ls",
+                    "week": 18,
+                    "date": "2026-09-04",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "140-SRS流媒体服务器-RTMP协议(下)",
+                    "duration": "33min"
+                },
+                {
+                    "id": "w18-周六-ydy",
+                    "week": 18,
+                    "date": "2026-09-05",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目原型：SRS 环境搭建 + RTMP 推拉流",
+                    "duration": ""
+                },
+                {
+                    "id": "w18-周日-ydy",
+                    "week": 18,
+                    "date": "2026-09-06",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目原型：HTTP-FLV/HLS 分发链路验证",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 19,
+            "start": "2026-09-07",
+            "end": "2026-09-13",
+            "range": "09/07 - 09/13",
+            "totalMin": 279,
+            "theme": "SRS HTTP-FLV",
+            "tasks": [
+                {
+                    "id": "w19-周一-ls",
+                    "week": 19,
+                    "date": "2026-09-07",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "141-SRS流媒体服务器-RTMP协议2 + 142-SRS流媒体服务器-RTMP推流消息处理",
+                    "duration": "23+58=81min"
+                },
+                {
+                    "id": "w19-周二-ls",
+                    "week": 19,
+                    "date": "2026-09-08",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "143-SRS流媒体服务器-HTTP-FLV框架分析",
+                    "duration": "47min"
+                },
+                {
+                    "id": "w19-周三-ls",
+                    "week": 19,
+                    "date": "2026-09-09",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "144-1SRS服务器-HTTP-FLV-配置文件 + 145-2SRS服务器-HTTP-FLV-推拉",
+                    "duration": "24+25=49min"
+                },
+                {
+                    "id": "w19-周四-ls",
+                    "week": 19,
+                    "date": "2026-09-10",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "146-3SRS服务器-HTTP-FLV-拉流1",
+                    "duration": "50min"
+                },
+                {
+                    "id": "w19-周五-ls",
+                    "week": 19,
+                    "date": "2026-09-11",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "147-4SRS服务器-HTTP-FLV-拉流2",
+                    "duration": "52min"
+                },
+                {
+                    "id": "w19-周六-ydy",
+                    "week": 19,
+                    "date": "2026-09-12",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目原型：推流/拉流链路串联",
+                    "duration": ""
+                },
+                {
+                    "id": "w19-周日-ydy",
+                    "week": 19,
+                    "date": "2026-09-13",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目原型：延迟采集脚本初版",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 20,
+            "start": "2026-09-14",
+            "end": "2026-09-20",
+            "range": "09/14 - 09/20",
+            "totalMin": 274,
+            "theme": "SRS集群/HLS",
+            "tasks": [
+                {
+                    "id": "w20-周一-ls",
+                    "week": 20,
+                    "date": "2026-09-14",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "148-SRS服务器-Forward集群 + 149-SRS服务器-Forward源码分析2",
+                    "duration": "25+31=56min"
+                },
+                {
+                    "id": "w20-周二-ls",
+                    "week": 20,
+                    "date": "2026-09-15",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "150-SRS流媒体服务器-edge集群-1",
+                    "duration": "42min"
+                },
+                {
+                    "id": "w20-周三-ls",
+                    "week": 20,
+                    "date": "2026-09-16",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "151-SRS流媒体服务器-edge集群-2 + 152-SRS流媒体服务器-edge集群-3",
+                    "duration": "49+18=67min"
+                },
+                {
+                    "id": "w20-周四-ls",
+                    "week": 20,
+                    "date": "2026-09-17",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "153-SRS流媒体服务器-HLS文件配置 + 154-SRS流媒体服务器-HLS拉流分析1",
+                    "duration": "18+59=77min"
+                },
+                {
+                    "id": "w20-周五-ls",
+                    "week": 20,
+                    "date": "2026-09-18",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "156-SRS流媒体服务器-HLS拉流分析3(上)",
+                    "duration": "32min"
+                },
+                {
+                    "id": "w20-周六-ydy",
+                    "week": 20,
+                    "date": "2026-09-19",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目预研验收：链路方案 + 风险清单",
+                    "duration": ""
+                },
+                {
+                    "id": "w20-周日-ydy",
+                    "week": 20,
+                    "date": "2026-09-20",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目预研验收：README 骨架 + 下一阶段任务拆解",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 21,
+            "start": "2026-09-21",
+            "end": "2026-09-27",
+            "range": "09/21 - 09/27",
+            "totalMin": 257,
+            "theme": "SRS HLS + ZLMediaKit",
+            "tasks": [
+                {
+                    "id": "w21-周一-ls",
+                    "week": 21,
+                    "date": "2026-09-21",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "156-SRS流媒体服务器-HLS拉流分析3(下)",
+                    "duration": "31min"
+                },
+                {
+                    "id": "w21-周二-ls",
+                    "week": 21,
+                    "date": "2026-09-22",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "155-SRS流媒体服务器-HLS拉流分析2 + 1-ZLMediaKit环境搭建-RTSP",
+                    "duration": "31+27=58min"
+                },
+                {
+                    "id": "w21-周三-ls",
+                    "week": 21,
+                    "date": "2026-09-23",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "2-ZLMediaKit网络模型框架分析 + 3-1-RTSP推拉流框架分析-TCP模型",
+                    "duration": "31+30=61min"
+                },
+                {
+                    "id": "w21-周四-ls",
+                    "week": 21,
+                    "date": "2026-09-24",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "3-2-RTSP推拉流框架分析-TCP模型 + 3-3-RTSP推拉流框架分析-TCP模型",
+                    "duration": "44+11=55min"
+                },
+                {
+                    "id": "w21-周五-ls",
+                    "week": 21,
+                    "date": "2026-09-25",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "4-ZLMediaKit推流详解-TCP模式",
+                    "duration": "52min"
+                },
+                {
+                    "id": "w21-周六-ydy",
+                    "week": 21,
+                    "date": "2026-09-26",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目集成准备：SRS/ZLM 对接方案 + 简历素材梳理",
+                    "duration": ""
+                },
+                {
+                    "id": "w21-周日-ydy",
+                    "week": 21,
+                    "date": "2026-09-27",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目集成准备：录制/回放方案验证 + 简历初稿",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 22,
+            "start": "2026-09-28",
+            "end": "2026-10-04",
+            "range": "09/28 - 10/04",
+            "totalMin": 262,
+            "theme": "ZLMediaKit + SRS-WebRTC",
+            "tasks": [
+                {
+                    "id": "w22-周一-ls",
+                    "week": 22,
+                    "date": "2026-09-28",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "5-ZLM-RTSP拉流详解-TCP模式-bk + 6-RTSP推拉流框架分析-UDP模型 + 258-SRS开发环境搭建",
+                    "duration": "11+17+38=66min"
+                },
+                {
+                    "id": "w22-周二-ls",
+                    "week": 22,
+                    "date": "2026-09-29",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "259-SRS开发环境搭建包括推流、服务器配置、拉流测试-1 + 260-SRS开发环境搭建包括推流、服务器配置、拉流测试-2",
+                    "duration": "21+19=40min"
+                },
+                {
+                    "id": "w22-周三-ls",
+                    "week": 22,
+                    "date": "2026-09-30",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "261-SRS配置支持WebRTC推拉流1 + 262-SRS配置支持WebRTC推拉流2 + 263-SRS RTMP端口监听逻辑",
+                    "duration": "23+8+31=62min"
+                },
+                {
+                    "id": "w22-周四-ls",
+                    "week": 22,
+                    "date": "2026-10-01",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "264-SRS  RTMP推流拉流怎么创建连接 + 265-SRS RTMP推流读取数据,拉流转发数据",
+                    "duration": "28+17=45min"
+                },
+                {
+                    "id": "w22-周五-ls",
+                    "week": 22,
+                    "date": "2026-10-02",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "266-SRS 哪些配置文件会影响RTMP的延迟 + 267-SRS配置支持WebRTC直播",
+                    "duration": "39+10=49min"
+                },
+                {
+                    "id": "w22-周六-ydy",
+                    "week": 22,
+                    "date": "2026-10-03",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目集成：SRS-WebRTC 推拉流链路",
+                    "duration": ""
+                },
+                {
+                    "id": "w22-周日-ydy",
+                    "week": 22,
+                    "date": "2026-10-04",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目集成：RTMP/WebRTC 转换链路复盘",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 23,
+            "start": "2026-10-05",
+            "end": "2026-10-11",
+            "range": "10/05 - 10/11",
+            "totalMin": 261,
+            "theme": "SRS-WebRTC",
+            "tasks": [
+                {
+                    "id": "w23-周一-ls",
+                    "week": 23,
+                    "date": "2026-10-05",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "268- WebRTC 1v1通话1-配置和测试 + 269-WebRTC 1v1通话2-逻辑分析",
+                    "duration": "27+41=68min"
+                },
+                {
+                    "id": "w23-周二-ls",
+                    "week": 23,
+                    "date": "2026-10-06",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "270-rtmp2webrtc测试环境- + 271-rtmp2webrtc提出问题-灵魂拷问- + 272-rtmp2webrtc协议转换",
+                    "duration": "6+26+27=59min"
+                },
+                {
+                    "id": "w23-周三-ls",
+                    "week": 23,
+                    "date": "2026-10-07",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "273-RTMP2WebRTC逻辑",
+                    "duration": "56min"
+                },
+                {
+                    "id": "w23-周四-ls",
+                    "week": 23,
+                    "date": "2026-10-08",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "274-WebRTC2Rtmp测试环境 + 275-WebRTC2Rtmp协议转换 + 276-WebRTC2Rtmp逻辑分析",
+                    "duration": "6+4+20=30min"
+                },
+                {
+                    "id": "w23-周五-ls",
+                    "week": 23,
+                    "date": "2026-10-09",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "277-SRS-ICE交互分析",
+                    "duration": "48min"
+                },
+                {
+                    "id": "w23-周六-ydy",
+                    "week": 23,
+                    "date": "2026-10-10",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "20k项目压测：端到端延迟 + 并发推拉流数据",
+                    "duration": ""
+                },
+                {
+                    "id": "w23-周日-ydy",
+                    "week": 23,
+                    "date": "2026-10-11",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "简历定稿：项目亮点、数据和架构图写入简历",
+                    "duration": ""
+                }
+            ]
+        },
+        {
+            "week": 24,
+            "start": "2026-10-12",
+            "end": "2026-10-18",
+            "range": "10/12 - 10/18",
+            "totalMin": 245,
+            "theme": "SRS-WebRTC",
+            "tasks": [
+                {
+                    "id": "w24-周一-ls",
+                    "week": 24,
+                    "date": "2026-10-12",
+                    "day": "周一",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "278-SRS-DTLS握手 + 279-SRS-SRTP加密传输",
+                    "duration": "29+16=45min"
+                },
+                {
+                    "id": "w24-周二-ls",
+                    "week": 24,
+                    "date": "2026-10-13",
+                    "day": "周二",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "280-SRS-SDP详解1",
+                    "duration": "47min"
+                },
+                {
+                    "id": "w24-周三-ls",
+                    "week": 24,
+                    "date": "2026-10-14",
+                    "day": "周三",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "281-SRS-SDP详解2 + 282-参考资料-WebRTC常用的缩略词",
+                    "duration": "23+22=45min"
+                },
+                {
+                    "id": "w24-周四-ls",
+                    "week": 24,
+                    "date": "2026-10-15",
+                    "day": "周四",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "283参考资料-WebRTC的拥塞控制(上)",
+                    "duration": "39min"
+                },
+                {
+                    "id": "w24-周五-ls",
+                    "week": 24,
+                    "date": "2026-10-16",
+                    "day": "周五",
+                    "track": "ls",
+                    "trackName": "零声",
+                    "title": "283参考资料-WebRTC的拥塞控制(下) + 284-RTCP-报文类型 + 285-RTCP-SR",
+                    "duration": "38+13+18=69min"
+                },
+                {
+                    "id": "w24-周六-ydy",
+                    "week": 24,
+                    "date": "2026-10-17",
+                    "day": "周六",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "项目答辩稿：ICE/SDP/DTLS/SRTP/拥塞控制复述",
+                    "duration": ""
+                },
+                {
+                    "id": "w24-周日-ydy",
+                    "week": 24,
+                    "date": "2026-10-18",
+                    "day": "周日",
+                    "track": "ydy",
+                    "trackName": "易道云/项目",
+                    "title": "模拟面试：项目链路、弱网取舍、SRS/ZLM 选型",
+                    "duration": ""
+                }
+            ]
+        }
+    ],
+    "rest": {
+        "start": "2026-10-19",
+        "end": "2026-11-01",
+        "title": "投递并行补漏期"
+    },
+    "specialPeriods": [
+        {
+            "start": "2026-04-23",
+            "end": "2026-05-03",
+            "title": "术后恢复与重启期"
+        },
+        {
+            "start": "2026-10-19",
+            "end": "2026-11-01",
+            "title": "投递并行补漏期"
+        }
+    ],
+    "milestones": [
+        {
+            "date": "2026-05-24",
+            "name": "易道云远控完成"
+        },
+        {
+            "date": "2026-06-28",
+            "name": "易道云易播完成"
+        },
+        {
+            "date": "2026-08-16",
+            "name": "易道云云助教完成"
+        },
+        {
+            "date": "2026-09-20",
+            "name": "20k项目预研/原型完成"
+        },
+        {
+            "date": "2026-10-18",
+            "name": "20k项目集成、压测、简历定制完成"
+        },
+        {
+            "date": "2026-10-18",
+            "name": "零声全部完成"
+        },
+        {
+            "date": "2026-10-18",
+            "name": "投简历，开始集中投递与面试"
+        },
+        {
+            "date": "2026-11-01",
+            "name": "投递并行补漏期结束"
+        }
+    ]
+};
+const STORE_KEY = 'av_study_tracker_regenerated_v2';
+const LEGACY_KEYS = ['av_study_tracker_regenerated_v1', 'av_tracker_v4'];
+const API_KEY_STORE = 'av_study_tracker_sync_key';
+const allTasks = DATA.weeks.flatMap(w => w.tasks);
+const state = loadState();
+const syncState = {
+  authRequired: false,
+  busy: false,
+  serverReachable: false,
+  status: '正在检查同步状态...',
+  lastSyncedAt: state.lastSyncedAt || ''
+};
+let activeSyncPromise = null;
+let selectedWeek = currentWeek()?.week || DATA.weeks[0]?.week || 1;
+function todayISO(){const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).reduce((acc,part)=>{acc[part.type]=part.value;return acc},{});return `${parts.year}-${parts.month}-${parts.day}`}
+function blankClientState(){return{entries:{},lastSyncedAt:''}}
+function isValidIso(value){return typeof value==='string'&&!Number.isNaN(Date.parse(value))}
+function createEntry(done,updatedAt){return{done:!!done,updatedAt:isValidIso(updatedAt)?updatedAt:new Date().toISOString()}}
+function mergeEntryMaps(left,right){const merged={...left};Object.entries(right||{}).forEach(([taskId,record])=>{const current=merged[taskId];if(!current||record.updatedAt>current.updatedAt) merged[taskId]=record});return merged}
+function normalizeState(data){const next=blankClientState();if(data?.entries&&typeof data.entries==='object'){Object.entries(data.entries).forEach(([taskId,record])=>{if(!taskId) return;if(typeof record==='string') next.entries[taskId]=createEntry(true,record);else if(record&&typeof record==='object') next.entries[taskId]=createEntry(record.done,record.updatedAt)})}if(data?.done&&typeof data.done==='object'){Object.entries(data.done).forEach(([taskId,updatedAt])=>{if(!taskId) return;next.entries[taskId]=createEntry(true,updatedAt)})}if(data?.checkins&&typeof data.checkins==='object'){Object.entries(data.checkins).forEach(([date,checked])=>{if(!checked) return;const fallbackTime=isValidIso(`${date}T12:00:00+08:00`)?new Date(`${date}T12:00:00+08:00`).toISOString():new Date().toISOString();allTasks.filter(task=>task.date===date).forEach(task=>{next.entries[task.id]=createEntry(true,fallbackTime)})})}if(typeof data?.lastSyncedAt==='string') next.lastSyncedAt=data.lastSyncedAt;return next}
+function loadState(){try{const fresh=JSON.parse(localStorage.getItem(STORE_KEY));if(fresh)return normalizeState(fresh);for(const key of LEGACY_KEYS){const legacy=JSON.parse(localStorage.getItem(key));if(legacy)return normalizeState(legacy)}return blankClientState()}catch{return blankClientState()}}
+function saveState(){localStorage.setItem(STORE_KEY,JSON.stringify({entries:state.entries,lastSyncedAt:state.lastSyncedAt||''}))}
+function getStoredApiKey(){return localStorage.getItem(API_KEY_STORE)||''}
+function setStoredApiKey(value){if(value)localStorage.setItem(API_KEY_STORE,value);else localStorage.removeItem(API_KEY_STORE)}
+function taskDone(id){return !!state.entries[id]?.done}
+function toggleTask(id){state.entries[id]=createEntry(!taskDone(id),new Date().toISOString());saveState();render();syncToServer({silent:true})}
+function currentWeek(){const t=todayISO();return DATA.weeks.find(w=>w.start<=t&&t<=w.end)||DATA.weeks.find(w=>w.start>t)||DATA.weeks[DATA.weeks.length-1]}
+function escapeHTML(value){return String(value??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function pct(done,total){return total?Math.round(done*100/total):0}
+function formatSyncTime(value){if(!isValidIso(value)) return '';return new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value))}
+function updateSyncUI(){const syncStatus=document.getElementById('syncStatus');const syncHint=document.getElementById('syncHint');const syncBtn=document.getElementById('syncBtn');const setKeyBtn=document.getElementById('setKeyBtn');syncStatus.textContent=syncState.status;syncBtn.disabled=syncState.busy;syncBtn.textContent=syncState.busy?'同步中...':'立即同步';setKeyBtn.textContent=getStoredApiKey()?'更新同步口令':'设置同步口令';if(!syncState.serverReachable) syncHint.textContent='当前还没有连上同步服务，打卡会先保存在本机，服务恢复后可以再同步。';else if(syncState.authRequired&&!getStoredApiKey()) syncHint.textContent='服务器已开启同步口令，先点“设置同步口令”，再同步打卡数据。';else if(syncState.lastSyncedAt) syncHint.textContent=`最近一次同步：${formatSyncTime(syncState.lastSyncedAt)}`;else syncHint.textContent='当前支持本地缓存 + 服务端同步，多设备可以共用同一份打卡记录。'}
+function render(){const done=allTasks.filter(t=>taskDone(t.id)).length,total=allTasks.length,percent=pct(done,total),cw=currentWeek();document.getElementById('pageTitle').textContent=DATA.title;document.getElementById('doneDays').textContent=done;document.getElementById('totalDays').textContent=total;document.getElementById('currentWeek').textContent=cw?`第${cw.week}周`:'-';document.getElementById('progressPct').textContent=`${percent}%`;document.getElementById('progressPercentText').textContent=`${percent}%`;document.getElementById('progressBar').style.width=`${percent}%`;renderToday();renderWeekSelect();renderWeekTasks();renderWeekList();renderMilestones();updateSyncUI()}
+function renderToday(){
+  const t=todayISO();
+  document.getElementById('todayDate').textContent=t;
+  const tasks=allTasks.filter(task=>task.date===t);
+  if(!tasks.length){
+    const periods=(DATA.specialPeriods&&DATA.specialPeriods.length?DATA.specialPeriods:(DATA.rest?[DATA.rest]:[]));
+    const currentPeriod=periods.find(period=>period.start<=t&&t<=period.end);
+    document.getElementById('todayBox').innerHTML=`<p class="empty">${currentPeriod?escapeHTML(currentPeriod.title):'今天没有排期任务。'}</p>`;
+    return;
+  }
+  document.getElementById('todayBox').innerHTML=tasks.map(task=>`<div class="today-task"><div class="task-meta"><span>${escapeHTML(task.day)}</span><span>${escapeHTML(task.trackName)}</span><span>${escapeHTML(task.duration||'周末任务')}</span></div><div class="task-title">${escapeHTML(task.title)}</div><div class="actions"><button class="primary" onclick="toggleTask('${task.id}')">${taskDone(task.id)?'取消完成':'完成打卡'}</button></div></div>`).join('')
+}
+function renderWeekSelect(){const select=document.getElementById('weekSelect');select.innerHTML=DATA.weeks.map(w=>`<option value="${w.week}">第${w.week}周 | ${escapeHTML(w.range)} | ${escapeHTML(w.theme||'学习任务')}</option>`).join('');select.value=String(selectedWeek);select.onchange=()=>{selectedWeek=Number(select.value);render()}}
+function renderWeekTasks(){const w=DATA.weeks.find(item=>item.week===selectedWeek),box=document.getElementById('weekTasks');if(!w){box.innerHTML='<p class="empty">没有找到该周。</p>';return}box.innerHTML=w.tasks.map(task=>`<div class="task-row ${taskDone(task.id)?'is-done':''}"><button class="check ${taskDone(task.id)?'done':''}" aria-label="${taskDone(task.id)?'取消完成':'完成打卡'}" onclick="toggleTask('${task.id}')"></button><div class="track ${task.track}">${escapeHTML(task.day)} · ${escapeHTML(task.trackName)}</div><div>${escapeHTML(task.title)}</div><div class="duration"><div class="duration-date">${escapeHTML(task.date)}</div>${task.duration?`<div class="duration-sub">${escapeHTML(task.duration)}</div>`:''}</div></div>`).join('')}
+function renderWeekList(){const t=todayISO();document.getElementById('weekList').innerHTML=DATA.weeks.map(w=>{const done=w.tasks.filter(task=>taskDone(task.id)).length,isCurrent=w.start<=t&&t<=w.end,isSelected=w.week===selectedWeek,cls=`${isCurrent?' current':''}${isSelected?' selected':''}${done===w.tasks.length?' done':''}`;const pills=w.tasks.map(task=>`<span class="pill ${taskDone(task.id)?'done':''} ${task.date===t?'today':''}"></span>`).join('');return `<div class="week-row${cls}" onclick="selectedWeek=${w.week};render()"><div class="week-title">第${w.week}周</div><div class="week-range">${escapeHTML(w.range)}</div><div><div>${escapeHTML(w.theme||'学习任务')}</div><div class="week-count">${done}/${w.tasks.length} 完成 · 零声 ${w.totalMin}min</div></div><div class="pills">${pills}</div></div>`}).join('')}
+function renderMilestones(){document.getElementById('milestones').innerHTML=DATA.milestones.map(m=>`<div class="milestone"><time>${escapeHTML(m.date)}</time><div>${escapeHTML(m.name)}</div></div>`).join('')}
+function syncHeaders(includeJson=true){const headers={};if(includeJson) headers['Content-Type']='application/json';const apiKey=getStoredApiKey();if(apiKey) headers['x-api-key']=apiKey;return headers}
+async function fetchJSON(url,options={}){const response=await fetch(url,options);let payload={};try{payload=await response.json()}catch{}if(!response.ok){const error=new Error(payload.message||`请求失败（${response.status}）`);error.status=response.status;throw error}return payload}
+async function loadServerConfig(){try{const data=await fetchJSON('/api/config');syncState.authRequired=!!data.authRequired;syncState.serverReachable=true;syncState.status=syncState.authRequired&&!getStoredApiKey()?'服务器需要同步口令':'已连接同步服务'}catch(error){syncState.serverReachable=false;syncState.status='当前仅本地保存'}updateSyncUI()}
+async function syncToServer({silent=false}={}){if(syncState.authRequired&&!getStoredApiKey()){syncState.status='服务器需要同步口令';updateSyncUI();if(!silent) alert('请先设置同步口令。');return}if(activeSyncPromise) return activeSyncPromise;syncState.busy=true;syncState.status='正在同步...';updateSyncUI();activeSyncPromise=(async()=>{try{const payload=await fetchJSON('/api/sync',{method:'POST',headers:syncHeaders(),body:JSON.stringify({state:{entries:state.entries,lastSyncedAt:state.lastSyncedAt||''}})});const merged=normalizeState(payload.state||payload);state.entries=merged.entries;state.lastSyncedAt=payload.serverTime||new Date().toISOString();saveState();syncState.serverReachable=true;syncState.lastSyncedAt=state.lastSyncedAt;syncState.status='同步成功';render()}catch(error){if(error.status===401){syncState.authRequired=true;syncState.status='同步口令错误';if(!silent) alert('同步口令不正确，请重新设置。')}else{syncState.serverReachable=false;syncState.status='同步失败，已保留本地记录';if(!silent) alert('同步失败，打卡已保存在当前设备。')}}finally{syncState.busy=false;updateSyncUI();activeSyncPromise=null}})();return activeSyncPromise}
+async function promptForApiKey(){const current=getStoredApiKey();const next=window.prompt('请输入同步口令。服务器未设置口令时可以留空。',current);if(next===null) return;setStoredApiKey(next.trim());await loadServerConfig();if(!syncState.authRequired||getStoredApiKey()) await syncToServer({silent:true});else updateSyncUI()}
+function exportData(){const done=Object.fromEntries(Object.entries(state.entries).filter(([,record])=>record.done).map(([taskId,record])=>[taskId,record.updatedAt]));const blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(),storeKey:STORE_KEY,lastSyncedAt:state.lastSyncedAt||'',entries:state.entries,done},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`study-tracker-backup-${todayISO()}.json`;a.click();URL.revokeObjectURL(a.href)}
+function importData(file){const reader=new FileReader();reader.onload=async()=>{try{const data=JSON.parse(reader.result);const imported=normalizeState(data);state.entries=mergeEntryMaps(state.entries,imported.entries);state.lastSyncedAt=imported.lastSyncedAt||state.lastSyncedAt||'';saveState();render();await syncToServer({silent:true})}catch(error){alert('导入失败：不是有效的 JSON 备份。')}};reader.readAsText(file,'utf-8')}
+function resetAllTasks(){if(!confirm('确定清空全部打卡数据吗？这会覆盖服务器上的同步记录。')) return;const updatedAt=new Date().toISOString();allTasks.forEach(task=>{state.entries[task.id]=createEntry(false,updatedAt)});state.lastSyncedAt='';saveState();render();syncToServer({silent:true})}
+function bindActions(){document.getElementById('syncBtn').onclick=()=>syncToServer();document.getElementById('setKeyBtn').onclick=promptForApiKey;document.getElementById('exportBtn').onclick=exportData;document.getElementById('importFile').onchange=event=>event.target.files[0]&&importData(event.target.files[0]);document.getElementById('resetBtn').onclick=resetAllTasks;window.addEventListener('offline',()=>{syncState.serverReachable=false;syncState.status='网络离线，当前仅本地保存';updateSyncUI()});window.addEventListener('online',async()=>{await loadServerConfig();if(!syncState.authRequired||getStoredApiKey()) await syncToServer({silent:true})})}
+async function init(){bindActions();render();await loadServerConfig();if(!syncState.authRequired||getStoredApiKey()) await syncToServer({silent:true})}
+init();
+</script>
+</body>
+</html>

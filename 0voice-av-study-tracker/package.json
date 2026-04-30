@@ -1,0 +1,25 @@
+{
+  "name": "0voice-av-study-tracker",
+  "version": "1.0.0",
+  "description": "0voice audio-video study tracker with local cache and server sync.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "check": "node --check server.js"
+  },
+  "keywords": [
+    "study-tracker",
+    "express",
+    "sync"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "playwright": "^1.59.1"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  }
+}
