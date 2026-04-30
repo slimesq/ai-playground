@@ -2,18 +2,58 @@ require('dotenv').config();
 
 const express = require('express');
 const fs = require('fs');
-const fsp = require('fs/promises');
 const path = require('path');
+const { DatabaseSync, backup } = require('node:sqlite');
 
 const PORT = Number(process.env.PORT || 3000);
 const TRACKER_API_KEY = String(process.env.TRACKER_API_KEY || '').trim();
 const DATA_DIR = path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'tracker-state.json');
+const LEGACY_JSON_FILE = path.join(DATA_DIR, 'tracker-state.json');
+const DB_PATH = resolveDbPath(process.env.DB_PATH);
+const BACKUP_DIR = resolveBackupDir(process.env.BACKUP_DIR);
+const BACKUP_INTERVAL_MINUTES = readPositiveInt(process.env.BACKUP_INTERVAL_MINUTES, 360);
+const BACKUP_RETENTION = readPositiveInt(process.env.BACKUP_RETENTION, 14);
 const APP_FILE = path.join(__dirname, 'study-tracker.html');
 
 const app = express();
-
 app.use(express.json({ limit: '1mb' }));
+
+let db = null;
+let backupTimer = null;
+let backupInFlight = false;
+const backupStatus = {
+  lastBackupAt: '',
+  lastBackupPath: '',
+  lastBackupReason: '',
+  lastBackupError: ''
+};
+
+function resolveDbPath(rawPath) {
+  if (!rawPath) {
+    return path.join(DATA_DIR, 'tracker.db');
+  }
+  return path.isAbsolute(rawPath)
+    ? rawPath
+    : path.join(__dirname, rawPath);
+}
+
+function resolveBackupDir(rawPath) {
+  if (!rawPath) {
+    return path.join(DATA_DIR, 'backups');
+  }
+  return path.isAbsolute(rawPath)
+    ? rawPath
+    : path.join(__dirname, rawPath);
+}
+
+function readPositiveInt(value, fallback) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function ensureParentDir(filePath) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+}
 
 function blankState() {
   return { version: 1, updatedAt: '', entries: {} };
@@ -94,33 +134,173 @@ function mergeStates(serverState, clientState) {
   return merged;
 }
 
-async function ensureDataFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DATA_FILE)) {
-    await fsp.writeFile(DATA_FILE, JSON.stringify(blankState(), null, 2), 'utf8');
-  }
+function initDatabase() {
+  ensureParentDir(DB_PATH);
+  db = new DatabaseSync(DB_PATH);
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS task_entries (
+      task_id TEXT PRIMARY KEY,
+      done INTEGER NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_task_entries_updated_at
+      ON task_entries(updated_at);
+  `);
+  migrateLegacyJsonIfNeeded();
 }
 
-async function readState() {
-  await ensureDataFile();
+function databaseIsEmpty() {
+  const row = db.prepare('SELECT COUNT(*) AS count FROM task_entries').get();
+  return !row || Number(row.count) === 0;
+}
+
+function hasDataToProtect() {
+  return !databaseIsEmpty();
+}
+
+function readLegacyJsonState() {
+  if (!fs.existsSync(LEGACY_JSON_FILE)) {
+    return blankState();
+  }
+
   try {
-    const raw = await fsp.readFile(DATA_FILE, 'utf8');
-    return normalizeState(JSON.parse(raw));
+    const raw = fs.readFileSync(LEGACY_JSON_FILE, 'utf8').replace(/^\uFEFF/, '');
+    const parsed = JSON.parse(raw);
+    return normalizeState(parsed);
   } catch (error) {
-    const fresh = blankState();
-    await writeState(fresh);
-    return fresh;
+    console.warn('Failed to read legacy JSON state:', error.message);
+    return blankState();
   }
 }
 
-async function writeState(state) {
+function writeEntries(entries) {
+  const upsert = db.prepare(`
+    INSERT INTO task_entries (task_id, done, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(task_id) DO UPDATE SET
+      done = excluded.done,
+      updated_at = excluded.updated_at
+    WHERE excluded.updated_at >= task_entries.updated_at
+  `);
+
+  db.exec('BEGIN');
+  try {
+    for (const [taskId, record] of Object.entries(entries)) {
+      upsert.run(taskId, record.done ? 1 : 0, record.updatedAt);
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+function migrateLegacyJsonIfNeeded() {
+  if (!databaseIsEmpty() || !fs.existsSync(LEGACY_JSON_FILE)) {
+    return;
+  }
+
+  const legacyState = readLegacyJsonState();
+  if (!Object.keys(legacyState.entries).length) {
+    return;
+  }
+
+  writeEntries(legacyState.entries);
+  console.log(`Imported legacy JSON state into SQLite: ${LEGACY_JSON_FILE}`);
+}
+
+function readState() {
+  const rows = db.prepare(`
+    SELECT task_id, done, updated_at
+    FROM task_entries
+  `).all();
+
+  const state = blankState();
+  for (const row of rows) {
+    state.entries[row.task_id] = {
+      done: !!row.done,
+      updatedAt: row.updated_at
+    };
+  }
+  state.updatedAt = latestUpdatedAt(state.entries);
+  return state;
+}
+
+function writeState(state) {
   const normalized = normalizeState(state);
-  normalized.updatedAt = latestUpdatedAt(normalized.entries);
-  await ensureDataFile();
-  await fsp.writeFile(DATA_FILE, JSON.stringify(normalized, null, 2), 'utf8');
-  return normalized;
+  writeEntries(normalized.entries);
+  return readState();
+}
+
+function formatBackupStamp(date = new Date()) {
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+function pruneBackups() {
+  ensureParentDir(path.join(BACKUP_DIR, 'placeholder'));
+  const files = fs.readdirSync(BACKUP_DIR)
+    .filter(name => /^tracker-\d{8}T\d{6}Z-[a-z]+\.db$/i.test(name))
+    .sort()
+    .reverse();
+
+  for (const file of files.slice(BACKUP_RETENTION)) {
+    fs.rmSync(path.join(BACKUP_DIR, file), { force: true });
+  }
+}
+
+async function createBackup(reason) {
+  if (backupInFlight || !hasDataToProtect()) {
+    return null;
+  }
+
+  backupInFlight = true;
+  const fileName = `tracker-${formatBackupStamp()}-${reason}.db`;
+  const targetPath = path.join(BACKUP_DIR, fileName);
+
+  try {
+    ensureParentDir(targetPath);
+    await backup(db, targetPath, { rate: 200 });
+    pruneBackups();
+    backupStatus.lastBackupAt = new Date().toISOString();
+    backupStatus.lastBackupPath = targetPath;
+    backupStatus.lastBackupReason = reason;
+    backupStatus.lastBackupError = '';
+    return targetPath;
+  } catch (error) {
+    backupStatus.lastBackupError = error.message;
+    throw error;
+  } finally {
+    backupInFlight = false;
+  }
+}
+
+function scheduleBackups() {
+  const intervalMs = BACKUP_INTERVAL_MINUTES * 60 * 1000;
+  backupTimer = setInterval(() => {
+    createBackup('scheduled').catch(error => {
+      console.error('Scheduled backup failed:', error);
+    });
+  }, intervalMs);
+
+  if (typeof backupTimer.unref === 'function') {
+    backupTimer.unref();
+  }
+}
+
+function registerShutdownHooks() {
+  const shutdown = async (signal) => {
+    try {
+      await createBackup('shutdown');
+    } catch (error) {
+      console.error(`Backup during ${signal} failed:`, error);
+    } finally {
+      process.exit(0);
+    }
+  };
+
+  process.once('SIGINT', () => { void shutdown('SIGINT'); });
+  process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
 }
 
 function requireApiKey(req, res, next) {
@@ -135,27 +315,37 @@ function requireApiKey(req, res, next) {
 
   return res.status(401).json({
     error: 'UNAUTHORIZED',
-    message: '缺少或错误的同步口令。'
+    message: 'Sync key missing or invalid.'
   });
 }
 
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
-    serverTime: new Date().toISOString()
+    serverTime: new Date().toISOString(),
+    storage: 'sqlite',
+    dbPath: DB_PATH,
+    backupDir: BACKUP_DIR,
+    backupIntervalMinutes: BACKUP_INTERVAL_MINUTES,
+    backupRetention: BACKUP_RETENTION,
+    lastBackupAt: backupStatus.lastBackupAt,
+    lastBackupPath: backupStatus.lastBackupPath,
+    lastBackupReason: backupStatus.lastBackupReason,
+    lastBackupError: backupStatus.lastBackupError
   });
 });
 
 app.get('/api/config', (req, res) => {
   res.json({
     authRequired: Boolean(TRACKER_API_KEY),
-    serverTime: new Date().toISOString()
+    serverTime: new Date().toISOString(),
+    storage: 'sqlite'
   });
 });
 
-app.get('/api/state', requireApiKey, async (req, res, next) => {
+app.get('/api/state', requireApiKey, (req, res, next) => {
   try {
-    const state = await readState();
+    const state = readState();
     res.json({
       state,
       serverTime: new Date().toISOString()
@@ -165,12 +355,12 @@ app.get('/api/state', requireApiKey, async (req, res, next) => {
   }
 });
 
-app.post('/api/sync', requireApiKey, async (req, res, next) => {
+app.post('/api/sync', requireApiKey, (req, res, next) => {
   try {
-    const serverState = await readState();
+    const serverState = readState();
     const clientState = normalizeState(req.body?.state || req.body || blankState());
     const merged = mergeStates(serverState, clientState);
-    const saved = await writeState(merged);
+    const saved = writeState(merged);
     res.json({
       state: saved,
       serverTime: new Date().toISOString()
@@ -189,17 +379,30 @@ app.get('/study-tracker.html', (req, res) => {
 });
 
 app.use((req, res) => {
-  res.status(404).json({ error: 'NOT_FOUND', message: '请求的资源不存在。' });
+  res.status(404).json({
+    error: 'NOT_FOUND',
+    message: 'Resource not found.'
+  });
 });
 
 app.use((error, req, res, next) => {
   console.error(error);
   res.status(500).json({
     error: 'SERVER_ERROR',
-    message: '服务器内部错误，请稍后再试。'
+    message: 'Internal server error.'
   });
 });
 
+initDatabase();
+scheduleBackups();
+registerShutdownHooks();
+
 app.listen(PORT, () => {
   console.log(`Study tracker server running at http://0.0.0.0:${PORT}`);
+  console.log(`SQLite file: ${DB_PATH}`);
+  console.log(`Backup directory: ${BACKUP_DIR}`);
+  console.log(`Backup interval: ${BACKUP_INTERVAL_MINUTES} minutes`);
+  void createBackup('startup').catch(error => {
+    console.error('Startup backup failed:', error);
+  });
 });

@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "0voice audio-video study tracker with local cache and server sync.",
   "main": "server.js",
+  "engines": {
+    "node": ">=22.16.0"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
