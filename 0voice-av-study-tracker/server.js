@@ -13,6 +13,7 @@ const DB_PATH = resolveDbPath(process.env.DB_PATH);
 const BACKUP_DIR = resolveBackupDir(process.env.BACKUP_DIR);
 const BACKUP_INTERVAL_MINUTES = readPositiveInt(process.env.BACKUP_INTERVAL_MINUTES, 360);
 const BACKUP_RETENTION = readPositiveInt(process.env.BACKUP_RETENTION, 14);
+const EXPOSE_HEALTH_PATHS = String(process.env.EXPOSE_HEALTH_PATHS || '').trim() === '1';
 const APP_FILE = path.join(__dirname, 'study-tracker.html');
 
 const app = express();
@@ -21,6 +22,8 @@ app.use(express.json({ limit: '1mb' }));
 let db = null;
 let backupTimer = null;
 let backupInFlight = false;
+let activeBackupPromise = null;
+let shutdownPromise = null;
 const backupStatus = {
   lastBackupAt: '',
   lastBackupPath: '',
@@ -196,6 +199,21 @@ function writeEntries(entries) {
   }
 }
 
+function writeEntriesWithinTransaction(entries) {
+  const upsert = db.prepare(`
+    INSERT INTO task_entries (task_id, done, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(task_id) DO UPDATE SET
+      done = excluded.done,
+      updated_at = excluded.updated_at
+    WHERE excluded.updated_at >= task_entries.updated_at
+  `);
+
+  for (const [taskId, record] of Object.entries(entries)) {
+    upsert.run(taskId, record.done ? 1 : 0, record.updatedAt);
+  }
+}
+
 function migrateLegacyJsonIfNeeded() {
   if (!databaseIsEmpty() || !fs.existsSync(LEGACY_JSON_FILE)) {
     return;
@@ -227,7 +245,24 @@ function readState() {
   return state;
 }
 
-function writeState(state) {
+function replaceState(state) {
+  const normalized = normalizeState(state);
+  db.exec('BEGIN');
+  try {
+    db.exec('DELETE FROM task_entries');
+    writeEntriesWithinTransaction(normalized.entries);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  return readState();
+}
+
+function writeState(state, options = {}) {
+  if (options.replace) {
+    return replaceState(state);
+  }
   const normalized = normalizeState(state);
   writeEntries(normalized.entries);
   return readState();
@@ -250,7 +285,11 @@ function pruneBackups() {
 }
 
 async function createBackup(reason) {
-  if (backupInFlight || !hasDataToProtect()) {
+  if (backupInFlight) {
+    return activeBackupPromise;
+  }
+
+  if (!hasDataToProtect()) {
     return null;
   }
 
@@ -258,21 +297,26 @@ async function createBackup(reason) {
   const fileName = `tracker-${formatBackupStamp()}-${reason}.db`;
   const targetPath = path.join(BACKUP_DIR, fileName);
 
-  try {
-    ensureParentDir(targetPath);
-    await backup(db, targetPath, { rate: 200 });
-    pruneBackups();
-    backupStatus.lastBackupAt = new Date().toISOString();
-    backupStatus.lastBackupPath = targetPath;
-    backupStatus.lastBackupReason = reason;
-    backupStatus.lastBackupError = '';
-    return targetPath;
-  } catch (error) {
-    backupStatus.lastBackupError = error.message;
-    throw error;
-  } finally {
-    backupInFlight = false;
-  }
+  activeBackupPromise = (async () => {
+    try {
+      ensureParentDir(targetPath);
+      await backup(db, targetPath, { rate: 200 });
+      pruneBackups();
+      backupStatus.lastBackupAt = new Date().toISOString();
+      backupStatus.lastBackupPath = targetPath;
+      backupStatus.lastBackupReason = reason;
+      backupStatus.lastBackupError = '';
+      return targetPath;
+    } catch (error) {
+      backupStatus.lastBackupError = error.message;
+      throw error;
+    } finally {
+      backupInFlight = false;
+      activeBackupPromise = null;
+    }
+  })();
+
+  return activeBackupPromise;
 }
 
 function scheduleBackups() {
@@ -290,12 +334,36 @@ function scheduleBackups() {
 
 function registerShutdownHooks() {
   const shutdown = async (signal) => {
+    if (shutdownPromise) {
+      return shutdownPromise;
+    }
+
+    shutdownPromise = (async () => {
+      let shouldTryShutdownBackup = true;
+      try {
+        if (activeBackupPromise) {
+          try {
+            await activeBackupPromise;
+            shouldTryShutdownBackup = false;
+          } catch (error) {
+            console.error(`Active backup before ${signal} failed:`, error);
+          }
+        }
+        if (shouldTryShutdownBackup) {
+          await createBackup('shutdown');
+        }
+      } catch (error) {
+        console.error(`Backup during ${signal} failed:`, error);
+      } finally {
+        process.exit(0);
+      }
+    })();
+
     try {
-      await createBackup('shutdown');
+      await shutdownPromise;
     } catch (error) {
-      console.error(`Backup during ${signal} failed:`, error);
-    } finally {
-      process.exit(0);
+      console.error(`Shutdown during ${signal} failed:`, error);
+      process.exit(1);
     }
   };
 
@@ -320,19 +388,24 @@ function requireApiKey(req, res, next) {
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({
+  const payload = {
     ok: true,
     serverTime: new Date().toISOString(),
     storage: 'sqlite',
-    dbPath: DB_PATH,
-    backupDir: BACKUP_DIR,
     backupIntervalMinutes: BACKUP_INTERVAL_MINUTES,
     backupRetention: BACKUP_RETENTION,
     lastBackupAt: backupStatus.lastBackupAt,
-    lastBackupPath: backupStatus.lastBackupPath,
     lastBackupReason: backupStatus.lastBackupReason,
     lastBackupError: backupStatus.lastBackupError
-  });
+  };
+
+  if (EXPOSE_HEALTH_PATHS) {
+    payload.dbPath = DB_PATH;
+    payload.backupDir = BACKUP_DIR;
+    payload.lastBackupPath = backupStatus.lastBackupPath;
+  }
+
+  res.json(payload);
 });
 
 app.get('/api/config', (req, res) => {
@@ -359,8 +432,9 @@ app.post('/api/sync', requireApiKey, (req, res, next) => {
   try {
     const serverState = readState();
     const clientState = normalizeState(req.body?.state || req.body || blankState());
-    const merged = mergeStates(serverState, clientState);
-    const saved = writeState(merged);
+    const replace = req.body?.mode === 'replace' || req.body?.replace === true;
+    const merged = replace ? clientState : mergeStates(serverState, clientState);
+    const saved = writeState(merged, { replace });
     res.json({
       state: saved,
       serverTime: new Date().toISOString()

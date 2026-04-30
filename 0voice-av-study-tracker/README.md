@@ -61,6 +61,12 @@ DATA_ROOT=/var/lib/0voice-av-study-tracker \
 bash scripts/deploy.sh
 ```
 
+If you want to remove an existing sync key:
+
+```bash
+CLEAR_TRACKER_API_KEY=1 bash scripts/deploy.sh
+```
+
 The script will:
 
 - write `.env`
