@@ -55,10 +55,22 @@ bash scripts/deploy.sh
 If you want the app and nginx to be configured in one shot, use:
 
 ```bash
-bash scripts/deploy-full.sh
+bash scripts/deploy-nginx.sh
 ```
 
-This script supports two nginx exposure modes:
+By default, this project is exposed at:
+
+```text
+/0voice-av-study-tracker/
+```
+
+So after deployment you can visit:
+
+```text
+http://your-server-ip/0voice-av-study-tracker/
+```
+
+This script still supports two nginx exposure modes:
 
 - `EXPOSE_MODE=subdomain`: one host name per service
 - `EXPOSE_MODE=path`: one host name with multiple path prefixes
@@ -98,27 +110,31 @@ An nginx example config is included at `deploy/nginx.conf.example`.
 If you want the server to be reachable directly on port 80, run:
 
 ```bash
-bash scripts/deploy-full.sh
+bash scripts/deploy-nginx.sh
 ```
 
-By default the nginx `server_name` is `_`, which works for direct IP access.
+By default the nginx `server_name` is `_`, which works for direct IP access, and the path prefix is fixed to:
+
+```text
+/0voice-av-study-tracker/
+```
 
 If you already have a domain, pass it in when you run the script:
 
 ```bash
-DOMAIN=tracker.example.com bash scripts/deploy-full.sh
+DOMAIN=tracker.example.com bash scripts/deploy-nginx.sh
 ```
 
-If you want each project under a different path on the same domain or IP:
+If you really want to override the default path, you still can:
 
 ```bash
-EXPOSE_MODE=path PATH_PREFIX=/tracker bash scripts/deploy-full.sh
+EXPOSE_MODE=path PATH_PREFIX=/tracker bash scripts/deploy-nginx.sh
 ```
 
-If you want a shared domain plus a custom path:
+Or use a shared domain plus a custom path:
 
 ```bash
-DOMAIN=tools.example.com EXPOSE_MODE=path PATH_PREFIX=/tracker bash scripts/deploy-full.sh
+DOMAIN=tools.example.com EXPOSE_MODE=path PATH_PREFIX=/tracker bash scripts/deploy-nginx.sh
 ```
 
 The full deploy script will:
@@ -135,13 +151,13 @@ After that, make sure your Alibaba Cloud security group allows `TCP/80`.
 Different subdomains:
 
 ```bash
-DOMAIN=tracker.example.com EXPOSE_MODE=subdomain bash scripts/deploy-full.sh
-DOMAIN=lab.example.com EXPOSE_MODE=subdomain bash scripts/deploy-full.sh
+DOMAIN=tracker.example.com EXPOSE_MODE=subdomain bash scripts/deploy-nginx.sh
+DOMAIN=lab.example.com EXPOSE_MODE=subdomain bash scripts/deploy-nginx.sh
 ```
 
 Different paths on one host:
 
 ```bash
-DOMAIN=tools.example.com EXPOSE_MODE=path PATH_PREFIX=/tracker bash scripts/deploy-full.sh
-DOMAIN=tools.example.com EXPOSE_MODE=path PATH_PREFIX=/demo bash scripts/deploy-full.sh
+DOMAIN=tools.example.com EXPOSE_MODE=path PATH_PREFIX=/tracker bash scripts/deploy-nginx.sh
+DOMAIN=tools.example.com EXPOSE_MODE=path PATH_PREFIX=/demo bash scripts/deploy-nginx.sh
 ```
