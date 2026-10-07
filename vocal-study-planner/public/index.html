@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8f4">
+  <title>声乐练习室</title>
+  <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="favicon-20261005-r3.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-20261005-r3.png">
+  <link rel="stylesheet" href="app.css?v=20261005-11">
+  <script type="module" src="app.js?v=20261005-11"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="app-brand">
+          <span class="brand-mark" aria-hidden="true"><img src="favicon.svg" width="37" height="37" alt=""></span>
+          <span class="brand-copy"><strong>声乐练习室</strong><small id="brandProgram">椰子音乐 · 内推班</small></span>
+        </div>
+        <button type="button" class="topbar-action" id="openSettings" data-open-settings aria-label="设置" aria-haspopup="dialog" aria-controls="settingsDialog">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#sliders"></use></svg><span>设置</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-content" id="mainContent" tabindex="-1">
+      <div class="page-heading">
+        <h1 id="pageTitle" tabindex="-1">学习计划</h1>
+        <div id="overallProgress" class="overall-progress"></div>
+      </div>
+
+      <section id="todayView" class="today-focus" aria-labelledby="todayCoursesHeading">
+        <div class="section-heading"><h2 id="todayCoursesHeading">下一次学习</h2></div>
+        <div id="todayCourses" class="lesson-list"></div>
+      </section>
+
+      <section id="catalogView" class="catalog-view" aria-labelledby="catalogHeading">
+        <div class="catalog-heading">
+          <h2 id="catalogHeading">全部课程</h2>
+          <button type="button" class="text-btn" id="locateNext">定位下一课</button>
+        </div>
+        <div class="catalog-tools">
+          <div class="catalog-search">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#search"></use></svg>
+            <label class="sr-only" for="catalogSearch">搜索课程或学习记录</label>
+            <input id="catalogSearch" type="search" placeholder="搜索课程或学习记录" autocomplete="off">
+          </div>
+          <div class="catalog-filters">
+            <label for="catalogPhase">阶段</label><span class="select-control"><select id="catalogPhase"><option value="all">全部阶段</option></select><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#chevron-down"></use></svg></span>
+            <label for="catalogStatus">状态</label><span class="select-control"><select id="catalogStatus"><option value="all">全部状态</option><option value="pending">未开始</option><option value="learning">学习中</option><option value="done">已完成</option></select><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#chevron-down"></use></svg></span>
+          </div>
+        </div>
+        <div id="catalogCount" class="catalog-count" role="status" aria-live="polite"></div>
+        <div id="catalogList" class="catalog-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="app-dialog lesson-dialog" id="lessonDialog" aria-labelledby="lessonDialogTitle">
+    <div class="dialog-header"><div><p class="eyebrow">课程练习</p><h2 id="lessonDialogTitle">课程详情</h2></div><button type="button" class="icon-button dialog-close" data-close="lessonDialog" aria-label="关闭课程详情"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#x"></use></svg></button></div>
+    <div id="lessonDialogBody" class="dialog-body"></div>
+    <div class="dialog-footer"><button type="button" class="secondary-button" id="saveLesson"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#save"></use></svg><span>添加学习记录</span></button><button type="button" class="primary-button" id="lessonComplete"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#check"></use></svg><span>标记完成</span></button></div>
+  </dialog>
+
+  <dialog class="app-dialog settings-dialog" id="settingsDialog" aria-labelledby="settingsDialogTitle">
+    <div class="dialog-header"><div><p class="eyebrow">计划与数据</p><h2 id="settingsDialogTitle">设置</h2></div><button type="button" class="icon-button dialog-close" data-close="settingsDialog" aria-label="关闭设置"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#x"></use></svg></button></div>
+    <form id="settingsForm">
+      <div class="dialog-body settings-fields">
+        <div class="form-grid">
+          <div class="form-field"><label for="startDate">开始日期</label><input id="startDate" name="startDate" type="date" value="2026-10-05" required></div>
+          <div class="form-field"><label for="program">学习方案</label><span class="select-control"><select id="program" name="program"><option value="full">内推班 · 四阶段</option><option value="basic">全能班 · 三阶段</option></select><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#chevron-down"></use></svg></span></div>
+        </div>
+        <fieldset class="weekday-fieldset"><legend>每周练习日</legend><div class="weekday-grid"><label><input type="checkbox" name="days" value="1"><span>周一</span></label><label><input type="checkbox" name="days" value="2"><span>周二</span></label><label><input type="checkbox" name="days" value="3" checked><span>周三</span></label><label><input type="checkbox" name="days" value="4"><span>周四</span></label><label><input type="checkbox" name="days" value="5"><span>周五</span></label><label><input type="checkbox" name="days" value="6" checked><span>周六</span></label><label><input type="checkbox" name="days" value="7"><span>周日</span></label></div></fieldset>
+        <div id="settingsPreview" class="settings-preview" aria-live="polite"></div>
+      </div>
+    </form>
+    <details class="data-panel" id="dataPanel">
+      <summary><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#cloud"></use></svg><span>同步与备份</span><svg class="ui-icon disclosure-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#chevron-down"></use></svg></summary>
+      <div class="data-panel-body">
+        <section class="data-section"><div class="data-section-head"><h3>同步状态</h3><span id="syncStatus" class="sync-status" role="status">检查中</span></div><button type="button" class="secondary-button" id="syncNowBtn"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#refresh"></use></svg><span>立即同步</span></button></section>
+        <section class="data-section"><h3>此设备同步码</h3><p class="field-help">在另一设备输入此码，即可使用同一份学习记录。</p><div class="code-row"><label class="sr-only" for="syncCode">此设备同步码</label><input id="syncCode" type="text" readonly spellcheck="false" autocomplete="off"><button type="button" class="secondary-button" id="copySyncCode"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#copy"></use></svg><span>复制</span></button></div><form id="connectForm" class="connect-form"><label for="connectCode">连接已有记录</label><div class="code-row"><input id="connectCode" type="text" spellcheck="false" autocomplete="off" placeholder="输入另一设备的同步码"><button type="submit" class="primary-button"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#link"></use></svg><span>连接</span></button></div></form></section>
+        <section class="data-section"><h3>文件备份</h3><p class="field-help">保存或恢复课程完成状态与练习记录。</p><div class="backup-actions"><button type="button" class="secondary-button" id="exportBackup"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#download"></use></svg><span>导出备份</span></button><input id="restoreFile" class="sr-only restore-file" type="file" accept="application/json,.json"><label for="restoreFile" class="secondary-button file-trigger"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#upload"></use></svg><span>导入备份</span></label></div></section>
+        <p id="dataFeedback" class="data-feedback" role="status" aria-live="polite"></p>
+      </div>
+    </details>
+    <div class="dialog-footer"><button type="button" class="secondary-button" data-close="settingsDialog">关闭</button><button type="submit" form="settingsForm" class="primary-button" id="saveSettings" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#save"></use></svg><span>保存排期</span></button></div>
+  </dialog>
+
+  <div id="toastRegion" class="toast-region" role="status" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>

@@ -9,7 +9,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "check": "node --check server.js"
+    "check": "node --check server.js && node --check tracker-ui.js",
+    "test:ui": "node --test tests/tracker-ui.test.js tests/resume-ui.test.js tests/navigation-ui.test.js tests/progress-navigation-ui.test.js tests/outline-optimization-ui.test.js",
+    "test": "node --test tests/*.test.js",
+    "test:schedule": "node --test tests/schedule-data.test.js",
+    "test:sync": "node --test tests/sync-reliability.test.js tests/progress-sync.test.js"
   },
   "keywords": [
     "study-tracker",

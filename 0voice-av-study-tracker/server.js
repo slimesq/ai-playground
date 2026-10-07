@@ -66,49 +66,106 @@ function isValidIso(value) {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value));
 }
 
-function normalizeEntry(record) {
+function canonicalTimestamp(value) {
+  return isValidIso(value) ? new Date(value).toISOString() : new Date(0).toISOString();
+}
+
+function invalidState(message) {
+  const error = new Error(message);
+  error.status = 400;
+  return error;
+}
+
+function normalizeProgress(progress, { strict = false } = {}) {
+  if (progress === undefined) return undefined;
+  const invalid = () => {
+    if (strict) throw invalidState('Entry progress is invalid.');
+    return undefined;
+  };
+  if (!progress || typeof progress !== 'object' || Array.isArray(progress)
+    || !['video', 'practice'].includes(progress.kind)) return invalid();
+  const allowed = progress.kind === 'video'
+    ? new Set(['kind', 'segmentIndex', 'positionSecond', 'note'])
+    : new Set(['kind', 'completedSteps', 'workedMinutes', 'note']);
+  if (Object.keys(progress).some(key => !allowed.has(key))) return invalid();
+  const fields = {
+    segmentIndex: [0, 999], positionSecond: [0, 864000],
+    workedMinutes: [0, 100000]
+  };
+  for (const [key, [min, max]] of Object.entries(fields)) {
+    if (progress[key] !== undefined && (!Number.isInteger(progress[key]) || progress[key] < min || progress[key] > max)) return invalid();
+  }
+  if (progress.completedSteps !== undefined && (!Array.isArray(progress.completedSteps)
+    || progress.completedSteps.length > 200
+    || progress.completedSteps.some(index => !Number.isInteger(index) || index < 0 || index > 199)
+    || new Set(progress.completedSteps).size !== progress.completedSteps.length)) return invalid();
+  if (progress.note !== undefined && (typeof progress.note !== 'string' || progress.note.length > 1000)) return invalid();
+  const normalized = { kind: progress.kind };
+  for (const key of Object.keys(fields)) if (progress[key] !== undefined) normalized[key] = progress[key];
+  if (progress.completedSteps !== undefined) normalized.completedSteps = [...progress.completedSteps];
+  if (progress.note !== undefined) normalized.note = progress.note;
+  return normalized;
+}
+
+function normalizeEntry(record, { strict = false } = {}) {
   if (typeof record === 'string') {
+    if (strict && !isValidIso(record)) throw invalidState('Entry timestamp must be a valid date.');
     return {
       done: true,
-      updatedAt: isValidIso(record) ? record : new Date(0).toISOString()
+      updatedAt: canonicalTimestamp(record),
+      evidence: ''
     };
   }
 
-  if (!record || typeof record !== 'object') {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    if (strict) throw invalidState('Each entry must be an object.');
     return null;
   }
 
+  if (strict && typeof record.done !== 'boolean') throw invalidState('Entry done must be a boolean.');
+  if (strict && !isValidIso(record.updatedAt)) throw invalidState('Entry updatedAt must be a valid date.');
+  if (strict && record.evidence !== undefined && (typeof record.evidence !== 'string' || record.evidence.length > 4000)) {
+    throw invalidState('Entry evidence must be a string of at most 4000 characters.');
+  }
+  const evidence = typeof record.evidence === 'string' ? record.evidence.slice(0, 4000) : '';
+  const progress = normalizeProgress(record.progress, { strict });
+  const done = strict ? record.done : record.done === 'false' || record.done === 0 ? false
+    : record.done === 'true' || record.done === 1 ? true : !!record.done;
   return {
-    done: !!record.done,
-    updatedAt: isValidIso(record.updatedAt)
-      ? record.updatedAt
-      : new Date(0).toISOString()
+    done,
+    updatedAt: canonicalTimestamp(record.updatedAt),
+    evidence,
+    ...(progress ? { progress } : {})
   };
 }
 
 function latestUpdatedAt(entries) {
   let latest = '';
   for (const record of Object.values(entries || {})) {
-    if (record?.updatedAt && record.updatedAt > latest) {
-      latest = record.updatedAt;
-    }
+    if (isValidIso(record?.updatedAt) && (!latest || Date.parse(record.updatedAt) > Date.parse(latest))) latest = canonicalTimestamp(record.updatedAt);
   }
   return latest;
 }
 
-function normalizeState(data) {
+function normalizeState(data, { strict = false } = {}) {
   const state = blankState();
-  if (data?.entries && typeof data.entries === 'object') {
+  if (strict && (!data || typeof data !== 'object' || !data.entries || typeof data.entries !== 'object' || Array.isArray(data.entries))) {
+    throw invalidState('State entries must be an object.');
+  }
+  if (data?.entries && typeof data.entries === 'object' && !Array.isArray(data.entries)) {
     for (const [taskId, record] of Object.entries(data.entries)) {
-      if (!taskId) continue;
-      const normalized = normalizeEntry(record);
+      if (!taskId) {
+        if (strict) throw invalidState('Entry id must not be empty.');
+        continue;
+      }
+      const normalized = normalizeEntry(record, { strict });
       if (normalized) {
         state.entries[taskId] = normalized;
       }
     }
   }
   state.updatedAt = isValidIso(data?.updatedAt)
-    ? data.updatedAt
+    ? canonicalTimestamp(data.updatedAt)
     : latestUpdatedAt(state.entries);
   return state;
 }
@@ -125,7 +182,7 @@ function mergeStates(serverState, clientState) {
     const clientRecord = normalizeEntry(clientState.entries?.[taskId]);
     if (serverRecord && clientRecord) {
       merged.entries[taskId] =
-        clientRecord.updatedAt > serverRecord.updatedAt
+        Date.parse(clientRecord.updatedAt) > Date.parse(serverRecord.updatedAt)
           ? clientRecord
           : serverRecord;
       continue;
@@ -145,11 +202,29 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS task_entries (
       task_id TEXT PRIMARY KEY,
       done INTEGER NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      evidence TEXT NOT NULL DEFAULT '',
+      progress TEXT NOT NULL DEFAULT ''
     );
     CREATE INDEX IF NOT EXISTS idx_task_entries_updated_at
       ON task_entries(updated_at);
   `);
+  const columns = db.prepare('PRAGMA table_info(task_entries)').all();
+  if (!columns.some(column => column.name === 'evidence')) db.exec("ALTER TABLE task_entries ADD COLUMN evidence TEXT NOT NULL DEFAULT ''");
+  if (!columns.some(column => column.name === 'progress')) db.exec("ALTER TABLE task_entries ADD COLUMN progress TEXT NOT NULL DEFAULT ''");
+  const oldTimestamps = db.prepare('SELECT task_id, updated_at FROM task_entries').all();
+  const updateTimestamp = db.prepare('UPDATE task_entries SET updated_at = ? WHERE task_id = ?');
+  db.exec('BEGIN');
+  try {
+    for (const row of oldTimestamps) {
+      const canonical = canonicalTimestamp(row.updated_at);
+      if (canonical !== row.updated_at) updateTimestamp.run(canonical, row.task_id);
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
   migrateLegacyJsonIfNeeded();
 }
 
@@ -179,18 +254,20 @@ function readLegacyJsonState() {
 
 function writeEntries(entries) {
   const upsert = db.prepare(`
-    INSERT INTO task_entries (task_id, done, updated_at)
-    VALUES (?, ?, ?)
+    INSERT INTO task_entries (task_id, done, updated_at, evidence, progress)
+    VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(task_id) DO UPDATE SET
       done = excluded.done,
-      updated_at = excluded.updated_at
+      updated_at = excluded.updated_at,
+      evidence = excluded.evidence,
+      progress = excluded.progress
     WHERE excluded.updated_at >= task_entries.updated_at
   `);
 
   db.exec('BEGIN');
   try {
     for (const [taskId, record] of Object.entries(entries)) {
-      upsert.run(taskId, record.done ? 1 : 0, record.updatedAt);
+      upsert.run(taskId, record.done ? 1 : 0, record.updatedAt, record.evidence || '', record.progress ? JSON.stringify(record.progress) : '');
     }
     db.exec('COMMIT');
   } catch (error) {
@@ -201,16 +278,18 @@ function writeEntries(entries) {
 
 function writeEntriesWithinTransaction(entries) {
   const upsert = db.prepare(`
-    INSERT INTO task_entries (task_id, done, updated_at)
-    VALUES (?, ?, ?)
+    INSERT INTO task_entries (task_id, done, updated_at, evidence, progress)
+    VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(task_id) DO UPDATE SET
       done = excluded.done,
-      updated_at = excluded.updated_at
+      updated_at = excluded.updated_at,
+      evidence = excluded.evidence,
+      progress = excluded.progress
     WHERE excluded.updated_at >= task_entries.updated_at
   `);
 
   for (const [taskId, record] of Object.entries(entries)) {
-    upsert.run(taskId, record.done ? 1 : 0, record.updatedAt);
+    upsert.run(taskId, record.done ? 1 : 0, record.updatedAt, record.evidence || '', record.progress ? JSON.stringify(record.progress) : '');
   }
 }
 
@@ -230,15 +309,19 @@ function migrateLegacyJsonIfNeeded() {
 
 function readState() {
   const rows = db.prepare(`
-    SELECT task_id, done, updated_at
+    SELECT task_id, done, updated_at, evidence, progress
     FROM task_entries
   `).all();
 
   const state = blankState();
   for (const row of rows) {
+    let progress;
+    try { progress = row.progress ? normalizeProgress(JSON.parse(row.progress)) : undefined; } catch { /* Preserve the task record if old progress JSON is malformed. */ }
     state.entries[row.task_id] = {
       done: !!row.done,
-      updatedAt: row.updated_at
+      updatedAt: canonicalTimestamp(row.updated_at),
+      evidence: row.evidence || '',
+      ...(progress ? { progress } : {})
     };
   }
   state.updatedAt = latestUpdatedAt(state.entries);
@@ -431,7 +514,7 @@ app.get('/api/state', requireApiKey, (req, res, next) => {
 app.post('/api/sync', requireApiKey, (req, res, next) => {
   try {
     const serverState = readState();
-    const clientState = normalizeState(req.body?.state || req.body || blankState());
+    const clientState = normalizeState(req.body?.state || req.body || blankState(), { strict: true });
     const replace = req.body?.mode === 'replace' || req.body?.replace === true;
     const merged = replace ? clientState : mergeStates(serverState, clientState);
     const saved = writeState(merged, { replace });
@@ -452,6 +535,13 @@ app.get('/study-tracker.html', (req, res) => {
   res.sendFile(APP_FILE);
 });
 
+// Expose only the browser assets; database files and configuration stay private.
+for (const asset of ['tracker-ui.css', 'tracker-ui.js']) {
+  app.get(`/${asset}`, (req, res) => {
+    res.sendFile(path.join(__dirname, asset));
+  });
+}
+
 app.use((req, res) => {
   res.status(404).json({
     error: 'NOT_FOUND',
@@ -461,9 +551,9 @@ app.use((req, res) => {
 
 app.use((error, req, res, next) => {
   console.error(error);
-  res.status(500).json({
-    error: 'SERVER_ERROR',
-    message: 'Internal server error.'
+  res.status(error.status === 400 ? 400 : 500).json({
+    error: error.status === 400 ? 'INVALID_STATE' : 'SERVER_ERROR',
+    message: error.status === 400 ? error.message : 'Internal server error.'
   });
 });
 

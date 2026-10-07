@@ -1,0 +1,14 @@
+{
+  "name": "vocal-study-planner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Independent vocal course schedule and practice journal",
+  "engines": { "node": ">=22.16.0" },
+  "scripts": {
+    "start": "node start.js",
+    "check": "node --check start.js && node --check server.js && node --check public/app.js && node --check public/plan.js && node --check public/journal.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js"
+  },
+  "devDependencies": { "playwright": "1.59.1" }
+}
