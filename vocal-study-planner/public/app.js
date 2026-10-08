@@ -231,7 +231,11 @@ function statusBadge(status) {
 function activeLessons() { return LESSONS.filter(lesson => plan.courseSchedules[lesson.id]); }
 function courseWeeks(id) { return plan.weeks.filter(week => week.lessonIds.includes(id)); }
 function nextLesson() { return activeLessons().find(lesson => entry(lesson.id).status !== 'done'); }
-function dateRange(schedule) { return `${dateLabel(schedule.startDate)}${schedule.startDate !== schedule.endDate ? ` — ${dateLabel(schedule.endDate)}` : ''}`; }
+function dateRange(schedule) {
+  const year = schedule.startDate.slice(0, 4) !== todayISO().slice(0, 4)
+    || schedule.endDate.slice(0, 4) !== schedule.startDate.slice(0, 4);
+  return `${dateLabel(schedule.startDate, year)}${schedule.startDate !== schedule.endDate ? ` — ${dateLabel(schedule.endDate, year)}` : ''}`;
+}
 function phaseExpansionKey(id) { return JSON.stringify([$('catalogSearch').value.trim().toLocaleLowerCase(), $('catalogPhase').value, $('catalogStatus').value, id]); }
 
 function snapshotFocus() {
@@ -328,8 +332,9 @@ function renderCourseWeeks(lessons) {
     groups.get(week.number).lessons.push(lesson);
   }
   return Array.from(groups.values(), ({ week, lessons: courses }) => {
-    const crossYear = week.startDate.slice(0, 4) !== week.endDate.slice(0, 4);
-    const shortDate = date => `${crossYear ? date.slice(0, 4) + '.' : ''}${Number(date.slice(5, 7))}.${Number(date.slice(8, 10))}`;
+    const showYear = week.startDate.slice(0, 4) !== todayISO().slice(0, 4)
+      || week.startDate.slice(0, 4) !== week.endDate.slice(0, 4);
+    const shortDate = date => `${showYear ? date.slice(0, 4) + '.' : ''}${Number(date.slice(5, 7))}.${Number(date.slice(8, 10))}`;
     const heading = `week-${courses[0].phaseId}-${week.number}`;
     return `<div class="week-group" data-week="${week.number}" data-week-tone="${week.number % 2 ? 'a' : 'b'}"><h4 class="week-heading" id="${heading}" tabindex="-1"><span>第 ${week.number} 周</span><small>${shortDate(week.startDate)} — ${shortDate(week.endDate)}</small></h4>${courses.map(lesson => lessonCard(lesson, { compact: true })).join('')}</div>`;
   }).join('');
@@ -712,11 +717,11 @@ function updateSettingsPreview() {
   $('saveSettings').disabled = !settingsDirty();
   try {
     const next = buildPlan(settingsValues());
-    $('settingsPreview').textContent = `${next.phasePlans.length} 个阶段 · ${Object.keys(next.courseSchedules).length} 课 · ${next.sessions.length} 次学习安排 · 阶段间各休息一周（共 ${next.restPeriods.length} 周） · 预计 ${dateLabel(next.endDate, true)} 完成`;
+    $('settingsPreview').textContent = `${next.phasePlans.length} 个阶段 · ${Object.keys(next.courseSchedules).length} 课 · 每三周 2 课 · 阶段间各休息一周（共 ${next.restPeriods.length} 周） · 预计 ${dateLabel(next.endDate, true)} 完成`;
     $('settingsPreview').classList.remove('error');
   } catch {
     $('saveSettings').disabled = true;
-    $('settingsPreview').textContent = '请选择至少两个学习日，以及有效的开始日期。';
+    $('settingsPreview').textContent = '请选择至少两个可上课的星期，以及有效的开始日期。';
     $('settingsPreview').classList.add('error');
   }
 }

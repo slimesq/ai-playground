@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PHASES,
+  CADENCE,
   LESSONS,
   DEFAULT_CONFIG,
   validateConfig,
@@ -25,166 +26,166 @@ test('the supplied catalog has 14 + 20 + 20 + 20 ordered, stable lesson IDs', ()
   assert.ok(LESSONS.every(lesson => lesson.confirmed === false || lesson.confirmed === true));
 });
 
-test('default full program retains 82 Wednesday/Saturday sessions with three week-long stage breaks', () => {
+const DAY_MS = 86_400_000;
+const time = date => Date.parse(`${date}T00:00:00Z`);
+const daysBetween = (start, end) => (time(end) - time(start)) / DAY_MS;
+
+function assertCadence(plan) {
+  assert.equal(plan.sessions.length, Object.keys(plan.courseSchedules).length);
+  for (const phase of plan.phasePlans) {
+    const sessions = plan.sessions.filter(session => session.phaseId === phase.id);
+    const cycleCount = Math.ceil(phase.lessonIds.length / 2);
+    assert.equal(daysBetween(phase.startDate, phase.endDate) + 1, cycleCount * 21);
+    assert.deepEqual(sessions.map(session => session.lessonId), phase.lessonIds);
+    for (let cycle = 0; cycle < cycleCount; cycle++) {
+      const withinCycle = sessions.filter(session =>
+        Math.floor(daysBetween(phase.startDate, session.date) / 21) === cycle);
+      assert.equal(withinCycle.length, 2, `two courses in cycle ${cycle} of ${phase.id}`);
+      assert.equal(new Set(withinCycle.map(session => session.lessonId)).size, 2);
+      const gap = daysBetween(withinCycle[0].date, withinCycle[1].date);
+      assert.ok(gap >= 8 && gap <= 13, 'courses are distributed across the three-week cycle');
+    }
+  }
+  assert.ok(plan.sessions.every(session => plan.config.days.includes(session.weekday)));
+  assert.ok(plan.sessions.every(session => session.date >= plan.startDate && session.date <= plan.endDate));
+}
+
+test('default schedule spaces two distinct courses across each three-week cycle and retains stage breaks', () => {
+  assert.deepEqual(CADENCE, { cycleWeeks: 3, lessonsPerCycle: 2 });
   assert.deepEqual(DEFAULT_CONFIG.days, [3, 6]);
   assert.equal(DEFAULT_CONFIG.sessionMinutes, 120);
   const plan = buildPlan();
   assert.deepEqual(plan.config, { startDate: '2026-10-05', program: 'full', days: [3, 6], sessionMinutes: 120 });
+  assert.deepEqual(plan.cadence, CADENCE);
   assert.equal(plan.startDate, '2026-10-05');
-  assert.equal(plan.endDate, '2027-08-09');
+  assert.equal(plan.endDate, '2028-12-10');
   assert.deepEqual(plan.phasePlans.map(phase => [phase.startDate, phase.endDate]), [
-    ['2026-10-05', '2026-12-04'],
-    ['2026-12-12', '2027-02-26'],
-    ['2027-03-06', '2027-05-18'],
-    ['2027-05-26', '2027-08-09'],
+    ['2026-10-05', '2027-02-28'],
+    ['2027-03-08', '2027-10-03'],
+    ['2027-10-11', '2028-05-07'],
+    ['2028-05-15', '2028-12-10'],
   ]);
   assert.deepEqual(plan.restPeriods, [
-    { afterPhaseId: 'foundation', beforePhaseId: 'breath', startDate: '2026-12-05', endDate: '2026-12-11', days: 7 },
-    { afterPhaseId: 'breath', beforePhaseId: 'voice', startDate: '2027-02-27', endDate: '2027-03-05', days: 7 },
-    { afterPhaseId: 'voice', beforePhaseId: 'style', startDate: '2027-05-19', endDate: '2027-05-25', days: 7 },
+    { afterPhaseId: 'foundation', beforePhaseId: 'breath', startDate: '2027-03-01', endDate: '2027-03-07', days: 7 },
+    { afterPhaseId: 'breath', beforePhaseId: 'voice', startDate: '2027-10-04', endDate: '2027-10-10', days: 7 },
+    { afterPhaseId: 'voice', beforePhaseId: 'style', startDate: '2028-05-08', endDate: '2028-05-14', days: 7 },
   ]);
-  assert.deepEqual(plan.sessions.slice(0, 3).map(session => session.date), [
-    '2026-10-07', '2026-10-10', '2026-10-14',
+  assert.deepEqual(plan.sessions.slice(0, 4).map(session => session.date), [
+    '2026-10-07', '2026-10-17', '2026-10-28', '2026-11-07',
   ]);
-  assert.ok(plan.sessions.every(session => [3, 6].includes(session.weekday) && session.minutes === 120));
-  assert.equal(plan.sessions.at(-1).date, '2027-08-07');
-  assert.equal(plan.sessions.length, 82, 'the extra study dates are practice sessions, not new lessons');
-  assert.ok(plan.weeks.every(week => week.sessions.length > 0), 'a deadline-only week is not shown as a study week');
-});
-
-test('all 74 lessons get at least one ordered session, with accurate parts and planned budget', () => {
-  const plan = buildPlan();
-  assert.deepEqual(Object.keys(plan.courseSchedules), LESSONS.map(lesson => lesson.id));
-  assert.equal(new Set(plan.sessions.map(session => session.id)).size, plan.sessions.length);
+  assert.equal(plan.sessions.at(-1).date, '2028-12-02');
+  assert.equal(plan.sessions.length, 74);
+  assertCadence(plan);
   for (const phase of plan.phasePlans) {
-    const phaseSessions = plan.sessions.filter(session => session.phaseId === phase.id);
-    const indexes = phaseSessions.map(session => phase.lessonIds.indexOf(session.lessonId));
-    assert.equal(indexes[0], 0);
-    assert.equal(indexes.at(-1), phase.lessonIds.length - 1);
-    assert.ok(indexes.every((index, position) => position === 0 || index >= indexes[position - 1]));
+    const sessions = plan.sessions.filter(session => session.phaseId === phase.id);
+    assert.deepEqual(sessions.slice(1).map((session, index) => daysBetween(sessions[index].date, session.date)),
+      sessions.slice(1).map((_, index) => index % 2 === 0 ? 10 : 11));
   }
-  for (const lesson of LESSONS) {
-    const schedule = plan.courseSchedules[lesson.id];
-    const sessions = plan.sessions.filter(session => session.lessonId === lesson.id);
-    assert.ok(sessions.length >= 1, lesson.id);
-    assert.equal(schedule.startDate, sessions[0].date);
-    assert.equal(schedule.endDate, sessions.at(-1).date);
-    assert.deepEqual(schedule.sessionIds, sessions.map(session => session.id));
-    assert.deepEqual(sessions.map(session => session.part), sessions.map((_, index) => index + 1));
-    assert.ok(sessions.every(session => session.parts === sessions.length));
-  }
-  assert.equal(Object.hasOwn(plan, 'videoMinutes'), false, 'the source does not provide video duration');
 });
 
-test('extra study dates repeat practical skills, never ceremonies, exams, or showcases', () => {
-  const practicePriority = /节奏|节拍|音阶|模进|气息|共鸣|母音|混声/;
-  const singleSession = /典礼|考试|毕业|作品展|点评/;
-  const byId = new Map(LESSONS.map(lesson => [lesson.id, lesson]));
-  const defaultPlan = buildPlan();
-  const repeated = Object.entries(defaultPlan.courseSchedules)
-    .filter(([, schedule]) => schedule.sessionIds.length > 1)
-    .map(([id]) => byId.get(id));
-  assert.equal(repeated.length, 8, 'all eight surplus dates are spread across eight skill lessons');
-  assert.ok(repeated.every(lesson => practicePriority.test(lesson.title)));
-  assert.ok(repeated.some(lesson => lesson.phaseId === 'foundation'));
-  assert.ok(repeated.some(lesson => lesson.phaseId === 'breath'));
-  assert.ok(repeated.some(lesson => lesson.phaseId === 'voice'));
-  assert.ok(repeated.some(lesson => lesson.phaseId === 'style'));
-
-  const dailyPlan = buildPlan({ days: [1, 2, 3, 4, 5, 6, 7] });
-  for (const plan of [defaultPlan, dailyPlan]) {
-    for (const lesson of LESSONS.filter(item => singleSession.test(item.title))) {
-      assert.equal(plan.courseSchedules[lesson.id].sessionIds.length, 1, `${lesson.id} should be visited once`);
+test('all 74 courses have one stable primary session, without automatic repetitions', () => {
+  for (const config of [{}, { days: [1, 2, 3, 4, 5, 6, 7] }]) {
+    const plan = buildPlan(config);
+    assert.deepEqual(Object.keys(plan.courseSchedules), LESSONS.map(lesson => lesson.id));
+    assert.equal(new Set(plan.sessions.map(session => session.id)).size, 74);
+    for (const lesson of LESSONS) {
+      const sessions = plan.sessions.filter(session => session.lessonId === lesson.id);
+      assert.equal(sessions.length, 1, lesson.id);
+      const session = sessions[0];
+      assert.equal(session.id, `${lesson.id}-p01`);
+      assert.equal(session.part, 1);
+      assert.equal(session.parts, 1);
+      assert.deepEqual(plan.courseSchedules[lesson.id], {
+        startDate: session.date, endDate: session.date, sessionIds: [session.id],
+      });
     }
+    assert.equal(Object.hasOwn(plan, 'videoMinutes'), false);
   }
-  const calendarDays = (Date.parse(`${dailyPlan.endDate}T00:00:00Z`) -
-    Date.parse(`${dailyPlan.startDate}T00:00:00Z`)) / 86_400_000 + 1;
-  assert.equal(dailyPlan.sessions.length, calendarDays - 21,
-    'daily study retains every active date and leaves the three seven-day breaks empty');
 });
 
-test('basic program ends after the first three phases and does not schedule style lessons', () => {
+test('basic program schedules its 54 courses at the same pace with only two stage breaks', () => {
   const plan = buildPlan({ program: 'basic' });
-  assert.equal(plan.endDate, '2027-05-18');
+  assert.equal(plan.endDate, '2028-05-07');
   assert.equal(plan.restPeriods.length, 2);
   assert.equal(plan.restPeriods.at(-1).beforePhaseId, 'voice');
   assert.deepEqual(plan.phasePlans.map(phase => phase.id), ['foundation', 'breath', 'voice']);
-  assert.equal(Object.keys(plan.courseSchedules).length, 54);
+  assert.equal(plan.sessions.length, 54);
   assert.ok(plan.sessions.every(session => session.phaseId !== 'style'));
   assert.equal(Object.hasOwn(plan.courseSchedules, 's4-01'), false);
+  assertCadence(plan);
 });
 
-test('custom weekdays and budget retain lesson coverage and true week numbers', () => {
-  const plan = buildPlan({ startDate: '2026-10-05', days: [7, 1], sessionMinutes: 45 });
-  assert.deepEqual(plan.config.days, [1, 7]);
-  assert.ok(plan.sessions.every(session => [1, 7].includes(session.weekday) && session.minutes === 45));
-  assert.equal(new Set(plan.sessions.map(session => session.lessonId)).size, 74);
-  assert.ok(plan.weeks.every(week => week.sessions.every(session => session.weekNumber === week.number)));
-  assert.ok(plan.weeks.every(week => week.sessions.every(session =>
-    session.date >= week.startDate && session.date <= week.endDate)));
+test('all accepted weekday sets and start weekdays keep exactly two courses per cycle', () => {
+  for (let mask = 1; mask < 128; mask++) {
+    const days = Array.from({ length: 7 }, (_, index) => index + 1)
+      .filter(day => mask & (1 << (day - 1)));
+    if (days.length < 2) continue;
+    for (let offset = 0; offset < 7; offset++) {
+      const startDate = new Date(time('2030-01-28') + offset * DAY_MS).toISOString().slice(0, 10);
+      const plan = buildPlan({ startDate, days, sessionMinutes: 45 });
+      assertCadence(plan);
+      assert.ok(plan.sessions.every(session => session.minutes === 45));
+      const earliest = Array.from({ length: 7 }, (_, dayOffset) => dayOffset)
+        .find(dayOffset => days.includes(new Date(time(startDate) + dayOffset * DAY_MS).getUTCDay() || 7));
+      assert.equal(daysBetween(startDate, plan.sessions[0].date), earliest);
+    }
+  }
 });
 
-test('cross-year and month-end boundaries are deterministic UTC calendar dates', () => {
-  const plan = buildPlan({ startDate: '2026-12-31', program: 'full', days: [2, 5] });
-  assert.equal(plan.phasePlans[0].startDate, '2026-12-31');
-  assert.equal(plan.phasePlans[0].endDate, '2027-02-27');
-  assert.equal(plan.phasePlans[1].startDate, '2027-03-07');
-  assert.equal(plan.endDate, '2027-11-04');
-  assert.ok(plan.sessions.every(session => session.date >= plan.startDate && session.date <= plan.endDate));
-  assert.ok(plan.sessions.every(session => [2, 5].includes(session.weekday)));
-});
-
-test('every stage break is exactly seven empty days, with no leading or trailing rest', () => {
-  const dayMs = 86_400_000;
-  const time = date => Date.parse(`${date}T00:00:00Z`);
+test('cross-year, leap-year, month-end and upper-bound starts retain real UTC dates', () => {
   const scenarios = [
-    { config: {}, activeDays: [61, 77, 74, 76], counts: [17, 22, 21, 22] },
-    { config: { program: 'basic' }, activeDays: [61, 77, 74], counts: [17, 22, 21] },
-    { config: { days: [1, 7] }, activeDays: [61, 77, 74, 76], counts: [17, 22, 22, 22] },
-    { config: { startDate: '2026-12-31', days: [2, 5] }, activeDays: [59, 76, 77, 76], counts: [17, 22, 22, 21] },
-    { config: { days: [1, 2, 3, 4, 5, 6, 7] }, activeDays: [61, 77, 74, 76], counts: [61, 77, 74, 76] },
+    { config: { startDate: '2026-12-31', days: [2, 5] }, end: '2029-03-07' },
+    { config: { startDate: '2030-01-31' }, end: '2032-04-07' },
+    { config: { startDate: '2028-02-29' }, end: '2030-05-06' },
+    { config: { startDate: '2040-12-31' }, end: '2043-03-08' },
   ];
-  for (const { config, activeDays, counts } of scenarios) {
+  for (const { config, end } of scenarios) {
+    const plan = buildPlan(config);
+    assert.equal(plan.startDate, config.startDate);
+    assert.equal(plan.endDate, end);
+    assert.equal(daysBetween(plan.startDate, plan.endDate) + 1, 798);
+    assertCadence(plan);
+  }
+});
+
+test('stage breaks are seven empty days and calendar week numbers include unscheduled weeks', () => {
+  for (const config of [{}, { program: 'basic' }, { startDate: '2026-12-31', days: [1, 7] }]) {
     const plan = buildPlan(config);
     assert.equal(plan.restPeriods.length, plan.phasePlans.length - 1);
     assert.equal(plan.phasePlans[0].startDate, plan.startDate);
     assert.equal(plan.phasePlans.at(-1).endDate, plan.endDate);
-    assert.deepEqual(plan.phasePlans.map(phase =>
-      (time(phase.endDate) - time(phase.startDate)) / dayMs + 1), activeDays,
-    'stage breaks must not shrink or extend the original active teaching periods');
-    assert.deepEqual(plan.phasePlans.map(phase =>
-      plan.sessions.filter(session => session.phaseId === phase.id).length), counts,
-    'the original lesson and practice session allocations must be retained');
     for (const [index, rest] of plan.restPeriods.entries()) {
       const previous = plan.phasePlans[index];
       const next = plan.phasePlans[index + 1];
       assert.equal(rest.afterPhaseId, previous.id);
       assert.equal(rest.beforePhaseId, next.id);
       assert.equal(rest.days, 7);
-      assert.equal((time(rest.endDate) - time(rest.startDate)) / dayMs + 1, 7);
-      assert.equal(time(rest.startDate), time(previous.endDate) + dayMs);
-      assert.equal(time(next.startDate), time(rest.endDate) + dayMs);
-      assert.ok(plan.sessions.every(session => session.date < rest.startDate || session.date > rest.endDate),
-        `rest period ${rest.startDate}–${rest.endDate} must contain no lesson or practice sessions`);
+      assert.equal(daysBetween(rest.startDate, rest.endDate) + 1, 7);
+      assert.equal(daysBetween(previous.endDate, rest.startDate), 1);
+      assert.equal(daysBetween(rest.endDate, next.startDate), 1);
+      assert.ok(plan.sessions.every(session => session.date < rest.startDate || session.date > rest.endDate));
     }
     const firstDate = new Date(`${plan.startDate}T00:00:00Z`);
-    const firstMonday = firstDate.getTime() - ((firstDate.getUTCDay() + 6) % 7) * dayMs;
+    const firstMonday = firstDate.getTime() - ((firstDate.getUTCDay() + 6) % 7) * DAY_MS;
     for (const week of plan.weeks) {
-      assert.ok(week.sessions.length > 0, 'rest-only weeks stay out of the study-week collection');
-      assert.equal(week.number, (time(week.startDate) - firstMonday) / (7 * dayMs) + 1,
-        'study week labels must follow the calendar even after a rest week');
+      assert.ok(week.sessions.length > 0, 'weeks without courses stay out of the course collection');
+      assert.equal(week.number, (time(week.startDate) - firstMonday) / (7 * DAY_MS) + 1);
+      assert.ok(week.sessions.every(session => session.weekNumber === week.number));
+      assert.ok(week.sessions.every(session => session.date >= week.startDate && session.date <= week.endDate));
     }
+    assert.ok(plan.weeks.some((week, index) => index > 0 && week.number > plan.weeks[index - 1].number + 1),
+      'calendar labels skip weeks that have no lessons');
   }
 });
 
-test('the same config produces identical dates and IDs, and IDs stay tied to lesson parts', () => {
+test('dates are deterministic and course/session identities stay stable when the start moves', () => {
   const original = buildPlan({ startDate: '2027-01-01', days: [2, 6], sessionMinutes: 15 });
   const repeat = buildPlan({ startDate: '2027-01-01', days: [6, 2], sessionMinutes: 15 });
   assert.deepEqual(repeat, original);
-  assert.ok(original.sessions.every(session => session.id ===
-    `${session.lessonId}-p${String(session.part).padStart(2, '0')}`));
   const shifted = buildPlan({ startDate: '2027-01-08', days: [2, 6], sessionMinutes: 15 });
-  assert.equal(shifted.courseSchedules['s1-01'].sessionIds[0], original.courseSchedules['s1-01'].sessionIds[0]);
+  assert.deepEqual(shifted.sessions.map(session => session.id), original.sessions.map(session => session.id));
+  assert.deepEqual(Object.keys(shifted.courseSchedules), Object.keys(original.courseSchedules));
+  assert.ok(original.sessions.every(session => session.minutes === 15));
 });
 
 test('invalid dates, weekdays, programs, and budgets are rejected', () => {

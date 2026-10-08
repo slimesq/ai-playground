@@ -91,20 +91,31 @@ async function syncCourseStatuses(page, statuses) {
 test('one learning page groups each course once under its first planned week', async t => {
   const page = await pageAt(t);
   assert.equal(await page.locator('#pageTitle').textContent(), '学习计划');
+  assert.equal(await page.locator('.plan-cadence').textContent(), '每三周 2 课');
   assert.equal(await page.locator('#todayView').isVisible(), true);
   assert.equal(await page.locator('#catalogView').isVisible(), true);
   assert.equal(await page.locator('.primary-nav, #planView, #stageOverview, #phasePanel, #weekSchedule, #schedulePanel, #weekSelect, #firstWeek, #nextWeek').count(), 0);
   assert.equal(await page.locator('#catalogList .catalog-group').count(), 4);
   const ids = await page.locator('#catalogList .lesson-card').evaluateAll(cards => cards.map(card => card.dataset.lessonId));
   assert.equal(ids.length, 74);
-  assert.equal(new Set(ids).size, 74, 'repeat practice sessions do not duplicate course check-in cards');
+  assert.equal(new Set(ids).size, 74, 'each course appears once without duplicate check-in cards');
   assert.equal(await page.locator('[data-phase-toggle="foundation"]').getAttribute('aria-expanded'), 'true');
   assert.equal(await page.locator('[data-phase-toggle="style"]').getAttribute('aria-expanded'), 'false');
   assert.equal(await page.locator('#todayCourses .lesson-card').getAttribute('data-lesson-id'), 's1-01');
+  for (const [id, date] of [['s1-01', '10 月 7 日'], ['s1-02', '10 月 17 日'], ['s1-03', '10 月 28 日'], ['s1-04', '11 月 7 日']]) {
+    assert.ok((await page.locator(`#catalogList [data-lesson-id="${id}"] .lesson-card-meta`).textContent()).includes(date),
+      `${id} is spaced across a three-week cycle`);
+  }
   assert.deepEqual(await page.locator('#phase-foundation .week-group[data-week="1"] .lesson-card').evaluateAll(cards =>
-    cards.map(card => card.dataset.lessonId)), ['s1-01', 's1-02']);
+    cards.map(card => card.dataset.lessonId)), ['s1-01']);
+  assert.deepEqual(await page.locator('#phase-foundation .week-group[data-week="2"] .lesson-card').evaluateAll(cards =>
+    cards.map(card => card.dataset.lessonId)), ['s1-02']);
+  assert.equal(await page.locator('#phase-foundation .week-group[data-week="3"]').count(), 0,
+    'the third calendar week is left free between two-course cycles');
   assert.match(await page.locator('#phase-foundation .week-group[data-week="1"] .week-heading').textContent(), /第\s*1\s*周/);
-  assert.match(await page.locator('#catalogList [data-lesson-id="s1-10"] .lesson-card-meta').textContent(), /第\s*6\s*[–—-]\s*7\s*周/);
+  assert.equal(await page.locator('#catalogList [data-lesson-id="s1-10"]').evaluate(card => card.closest('.week-group').dataset.week), '14');
+  assert.match(await page.locator('#catalogList [data-lesson-id="s1-10"] .lesson-card-meta').textContent(), /2027\.1\.9/);
+  assert.doesNotMatch(await page.locator('#catalogList [data-lesson-id="s1-10"] .lesson-card-meta').textContent(), /再练|第\s*\d+\s*[–—-]\s*\d+\s*周/);
 
   const weekOneTone = await page.locator('#phase-foundation .week-group[data-week="1"]').getAttribute('data-week-tone');
   const weekTwoTone = await page.locator('#phase-foundation .week-group[data-week="2"]').getAttribute('data-week-tone');
@@ -128,9 +139,9 @@ test('phase rest weeks stay inside their preceding phase, preserve course totals
   const page = await pageAt(t);
   const separators = page.locator('#catalogList .phase-rest');
   const expectedRests = [
-    { after: 'foundation', before: 'breath', dates: ['2026-12-05', '2026-12-11'] },
-    { after: 'breath', before: 'voice', dates: ['2027-02-27', '2027-03-05'] },
-    { after: 'voice', before: 'style', dates: ['2027-05-19', '2027-05-25'] },
+    { after: 'foundation', before: 'breath', dates: ['2027-03-01', '2027-03-07'] },
+    { after: 'breath', before: 'voice', dates: ['2027-10-04', '2027-10-10'] },
+    { after: 'voice', before: 'style', dates: ['2028-05-08', '2028-05-14'] },
   ];
   assert.equal(await separators.count(), 3);
   for (const expected of expectedRests) {
@@ -171,11 +182,14 @@ test('phase rest weeks stay inside their preceding phase, preserve course totals
     assert.equal(await separators.count(), 3);
   }
   await page.locator('#openSettings').click();
+  assert.match(await page.locator('#settingsPreview').textContent(), /每三周 2 课/);
+  assert.equal(await page.locator('#settingsForm fieldset legend').textContent(), '可上课的星期');
+  assert.ok((await page.locator('#settingsForm').textContent()).includes('每三周安排两节课，按所选星期错开上课。'));
   assert.match(await page.locator('#settingsPreview').textContent(), /阶段间各休息一周（共 3 周）/);
-  assert.match(await page.locator('#settingsPreview').textContent(), /2027\.8\.9/);
+  assert.match(await page.locator('#settingsPreview').textContent(), /2028\.12\.10/);
   await page.locator('#program').selectOption('basic');
   assert.match(await page.locator('#settingsPreview').textContent(), /阶段间各休息一周（共 2 周）/);
-  assert.match(await page.locator('#settingsPreview').textContent(), /2027\.5\.18/);
+  assert.match(await page.locator('#settingsPreview').textContent(), /2028\.5\.7/);
   await page.locator('#saveSettings').click();
   assert.equal(await separators.count(), 2);
   assert.equal(await page.locator('#catalogList .phase-rest[data-before-phase="style"]').count(), 0);
@@ -230,20 +244,23 @@ test('search reaches later weeks without changing their tone and clears all cata
   assert.equal(await page.locator('#catalogList .lesson-card').count(), 74);
 });
 
-test('legacy week links locate a group without filtering the directory, including after browser Back', async t => {
+test('legacy week links locate an occupied week despite empty intervening weeks, including after browser Back', async t => {
   const page = await pageAt(t);
-  await page.goto(`${base}#plan/week/18`);
+  const linkedWeek = buildPlan().sessions.find(session => session.lessonId === 's2-04').weekNumber;
+  const linkedHash = `#plan/week/${linkedWeek}`;
+  await page.goto(`${base}${linkedHash}`);
   await page.reload();
   await page.locator('#catalogList .catalog-group').first().waitFor({ state: 'attached' });
   assert.equal(await page.locator('#catalogList .lesson-card').count(), 74);
-  const target = page.locator('#phase-breath .week-group[data-week="18"] .week-heading');
+  const targetSelector = `#phase-breath .week-group[data-week="${linkedWeek}"] .week-heading`;
+  const target = page.locator(targetSelector);
   assert.equal(await target.isVisible(), true);
-  assert.match(await target.textContent(), /第\s*18\s*周/);
-  await page.waitForFunction(() => {
-    const heading = document.querySelector('#phase-breath .week-group[data-week="18"] .week-heading');
+  assert.match(await target.textContent(), new RegExp(`第\\s*${linkedWeek}\\s*周`));
+  await page.waitForFunction(selector => {
+    const heading = document.querySelector(selector);
     const box = heading?.getBoundingClientRect();
     return box && box.top < innerHeight && box.bottom > 0;
-  });
+  }, targetSelector);
   assert.equal(await page.locator('#todayView').isVisible(), true);
   assert.equal(await page.locator('#catalogView').isVisible(), true);
   await page.evaluate(() => { location.hash = '#catalog'; });
@@ -251,7 +268,7 @@ test('legacy week links locate a group without filtering the directory, includin
   assert.equal(await page.locator('#catalogList .lesson-card').count(), 74);
   assert.equal(await page.locator('#catalogHeading').isVisible(), true);
   await page.goBack();
-  await page.waitForFunction(() => location.hash === '#plan/week/18');
+  await page.waitForFunction(hash => location.hash === hash, linkedHash);
   assert.equal(await target.isVisible(), true);
   assert.equal(await page.locator('#catalogList .lesson-card').count(), 74);
   assert.equal(await page.locator('#pageTitle').textContent(), '学习计划');
@@ -468,7 +485,7 @@ test('early completion keeps scheduled dates and global search reaches later cou
   assert.equal(await page.locator('#catalogList [data-lesson-id="s4-01"]').isVisible(), true);
 });
 
-test('next learning advances early, keeps the earliest unfinished course, and preserves weekly dates', async t => {
+test('next learning advances early, keeps the earliest unfinished course, and preserves three-week dates', async t => {
   const page = await pageAt(t);
   const mainCourse = page.locator('#todayCourses .lesson-card');
   async function expectNext(id) {
@@ -517,7 +534,7 @@ test('the next course follows early progress and moves back after cancellation',
   const page = await pageAt(t);
   await syncCourseStatuses(page, Object.fromEntries(LESSONS.filter(lesson => lesson.phaseId === 'foundation').map(lesson => [lesson.id, 'done'])));
   assert.equal(await page.locator('#todayCourses .lesson-card').getAttribute('data-lesson-id'), 's2-01');
-  assert.match(await page.locator('#todayCourses .lesson-card-meta').textContent(), /12 月 12 日/,
+  assert.match(await page.locator('#todayCourses .lesson-card-meta').textContent(), /2027\.3\.10/,
     'the next phase remains available early while keeping its date after the planned rest');
   assert.equal(await page.locator('#catalogList .phase-rest').count(), 3, 'early completion does not remove planned rest periods');
   await page.locator('#todayCourses .lesson-complete').click();
@@ -579,7 +596,7 @@ test('settings save is enabled only while the form differs from the saved schedu
 test('week groups are rebuilt from changed start date and weekdays instead of static course rows', async t => {
   const page = await pageAt(t);
   const firstHeading = await page.locator('#phase-foundation .week-group[data-week="1"] .week-heading').textContent();
-  assert.equal(await page.locator('#catalogList [data-lesson-id="s1-10"]').evaluate(card => card.closest('.week-group')?.dataset.week), '6');
+  assert.equal(await page.locator('#catalogList [data-lesson-id="s1-10"]').evaluate(card => card.closest('.week-group')?.dataset.week), '14');
   await page.locator('#openSettings').click();
   await page.locator('#startDate').fill('2026-10-12');
   await page.locator('#settingsForm input[name="days"][value="3"]').uncheck();
@@ -591,7 +608,8 @@ test('week groups are rebuilt from changed start date and weekdays instead of st
   const newHeading = await page.locator('#phase-foundation .week-group[data-week="1"] .week-heading').textContent();
   assert.notEqual(newHeading, firstHeading);
   assert.match(newHeading, /10\s*(?:月|\.)\s*12/);
-  assert.equal(await page.locator('#catalogList [data-lesson-id="s1-10"]').evaluate(card => card.closest('.week-group')?.dataset.week), '7');
+  assert.equal(await page.locator('#catalogList [data-lesson-id="s1-10"]').evaluate(card => card.closest('.week-group')?.dataset.week), '14');
+  assert.match(await page.locator('#catalogList [data-lesson-id="s1-02"] .lesson-card-meta').textContent(), /10 月 23 日/);
   assert.match(await page.locator('#catalogList [data-lesson-id="s1-01"] .lesson-card-meta').textContent(), /10 月 13 日/);
   const ids = await page.locator('#catalogList .lesson-card').evaluateAll(cards => cards.map(card => card.dataset.lessonId));
   assert.equal(ids.length, 74);
@@ -631,13 +649,15 @@ test('custom learning days and program survive refresh while existing records re
   assert.equal((await state(page)).config.sessionMinutes, DEFAULT_CONFIG.sessionMinutes);
 });
 
-test('a historical 30-minute config and actual minutes remain unchanged through offline reload and sync', async t => {
+test('a historical config and learning timestamps remain intact while the new three-week schedule applies after reload and sync', async t => {
   const page = await pageAt(t);
   await syncCourseRecords(page, { 's1-01': { status: 'learning', minutes: 25, note: '保留原有练习记录' } });
   await openCourse(page, 's1-01');
   await page.locator('#lessonComplete').click(); await close(page);
   await waitSync(page);
   const before = await state(page);
+  const originalHistory = before.entries['s1-01'].history;
+  assert.equal(originalHistory.length, 1);
   const historical = { ...before.config, days: [2, 5], sessionMinutes: 30 };
   const historicalStamp = new Date(Date.parse(before.configUpdatedAt) + 1000).toISOString();
   const canonicalResponse = await fetch(base + 'api/sync', {
@@ -664,6 +684,12 @@ test('a historical 30-minute config and actual minutes remain unchanged through 
   assert.equal(migrated.entries['s1-01'].status, 'done');
   assert.equal(migrated.entries['s1-01'].minutes, 25);
   assert.equal(migrated.entries['s1-01'].note, '保留原有练习记录');
+  assert.deepEqual(migrated.entries['s1-01'].history, originalHistory, 'offline reload preserves every original entry and creation time');
+  for (const [id, date] of [['s1-01', '10 月 6 日'], ['s1-02', '10 月 16 日'], ['s1-03', '10 月 27 日'], ['s1-04', '11 月 6 日']]) {
+    assert.ok((await page.locator(`#catalogList [data-lesson-id="${id}"] .lesson-card-meta`).textContent()).includes(date),
+      `${id} follows two distinct courses in each three-week block even with old saved settings`);
+  }
+  assert.equal(await page.locator('#todayCourses .lesson-card').getAttribute('data-lesson-id'), 's1-02', 'early completed courses continue to advance the next lesson');
   await page.unroute('**/api/**');
   await page.waitForFunction(() => !document.querySelector('#syncNowBtn').disabled);
   await openData(page);
@@ -672,6 +698,9 @@ test('a historical 30-minute config and actual minutes remain unchanged through 
   await waitSync(page); await page.reload(); await waitSync(page);
   assert.equal((await state(page)).config.sessionMinutes, 30);
   assert.equal((await state(page)).entries['s1-01'].minutes, 25);
+  assert.deepEqual((await state(page)).entries['s1-01'].history, originalHistory, 'sync and another reload retain history IDs and times');
+  const remote = await fetch(base + 'api/state', { headers: { 'X-Study-Key': before.key } }).then(response => response.json());
+  assert.deepEqual(remote.entries['s1-01'].history, originalHistory);
 });
 
 test('course titles remain editable and numbered without source notices', async t => {

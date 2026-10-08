@@ -7,8 +7,8 @@
   <title>声乐练习室</title>
   <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="favicon-20261005-r3.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-20261005-r3.png">
-  <link rel="stylesheet" href="app.css?v=20261005-11">
-  <script type="module" src="app.js?v=20261005-11"></script>
+  <link rel="stylesheet" href="app.css?v=20261008-1">
+  <script type="module" src="app.js?v=20261008-1"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -26,7 +26,7 @@
 
     <main class="main-content" id="mainContent" tabindex="-1">
       <div class="page-heading">
-        <h1 id="pageTitle" tabindex="-1">学习计划</h1>
+        <div class="page-title"><h1 id="pageTitle" tabindex="-1">学习计划</h1><p class="plan-cadence">每三周 2 课</p></div>
         <div id="overallProgress" class="overall-progress"></div>
       </div>
 
@@ -71,7 +71,7 @@
           <div class="form-field"><label for="startDate">开始日期</label><input id="startDate" name="startDate" type="date" value="2026-10-05" required></div>
           <div class="form-field"><label for="program">学习方案</label><span class="select-control"><select id="program" name="program"><option value="full">内推班 · 四阶段</option><option value="basic">全能班 · 三阶段</option></select><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icons.svg#chevron-down"></use></svg></span></div>
         </div>
-        <fieldset class="weekday-fieldset"><legend>每周练习日</legend><div class="weekday-grid"><label><input type="checkbox" name="days" value="1"><span>周一</span></label><label><input type="checkbox" name="days" value="2"><span>周二</span></label><label><input type="checkbox" name="days" value="3" checked><span>周三</span></label><label><input type="checkbox" name="days" value="4"><span>周四</span></label><label><input type="checkbox" name="days" value="5"><span>周五</span></label><label><input type="checkbox" name="days" value="6" checked><span>周六</span></label><label><input type="checkbox" name="days" value="7"><span>周日</span></label></div></fieldset>
+        <fieldset class="weekday-fieldset"><legend>可上课的星期</legend><div class="weekday-grid"><label><input type="checkbox" name="days" value="1"><span>周一</span></label><label><input type="checkbox" name="days" value="2"><span>周二</span></label><label><input type="checkbox" name="days" value="3" checked><span>周三</span></label><label><input type="checkbox" name="days" value="4"><span>周四</span></label><label><input type="checkbox" name="days" value="5"><span>周五</span></label><label><input type="checkbox" name="days" value="6" checked><span>周六</span></label><label><input type="checkbox" name="days" value="7"><span>周日</span></label></div><p class="field-help">每三周安排两节课，按所选星期错开上课。</p></fieldset>
         <div id="settingsPreview" class="settings-preview" aria-live="polite"></div>
       </div>
     </form>

@@ -73,10 +73,9 @@ export const DEFAULT_CONFIG = Object.freeze({
 
 const DAY_MS = 86_400_000;
 const SESSION_MINUTES = new Set([15, 30, 45, 60, 120, 180]);
-const PHASE_ENDS = [2, 4.5, 7, 9.5];
+export const CADENCE = Object.freeze({ cycleWeeks: 3, lessonsPerCycle: 2 });
+const CYCLE_DAYS = CADENCE.cycleWeeks * 7;
 const PHASE_REST_DAYS = 7;
-const SINGLE_SESSION_LESSON = /典礼|考试|毕业|作品展|点评/;
-const PRACTICE_PRIORITY = /节奏|节拍|音阶|模进|气息|共鸣|母音|混声/;
 
 function dateFromIso(value) {
   if (typeof value !== 'string' || !/^(20\d{2})-(\d{2})-(\d{2})$/.test(value)) {
@@ -99,48 +98,18 @@ function addDays(date, days) {
   return new Date(date.getTime() + days * DAY_MS);
 }
 
-function addMonthsClamped(date, months) {
-  const first = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
-  const lastDay = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), Math.min(date.getUTCDate(), lastDay)));
-}
-
-function monthBoundary(start, months) {
-  const whole = Math.floor(months);
-  return addDays(addMonthsClamped(start, whole), months % 1 ? 15 : 0);
-}
-
 function weekday(date) {
   return date.getUTCDay() || 7;
 }
 
-function assignLessonCounts(lessons, sessionCount) {
-  const counts = new Map(lessons.map(lesson => [lesson.id, 1]));
-  const eligible = lessons.filter(lesson => !SINGLE_SESSION_LESSON.test(lesson.title));
-  const preferred = eligible.filter(lesson => PRACTICE_PRIORITY.test(lesson.title));
-  let remaining = sessionCount - lessons.length;
-  if (remaining < 0 || (remaining > 0 && !eligible.length)) {
-    throw new RangeError('The selected weekdays cannot cover every lesson and practice session');
-  }
-
-  // Pick positions across the entire pool instead of duplicating the first
-  // lessons. Each priority skill receives at most one extra before other
-  // eligible lessons join the rotation.
-  function distribute(pool, slots) {
-    for (let index = 0; index < slots; index++) {
-      const roundStart = Math.floor(index / pool.length) * pool.length;
-      const roundSize = Math.min(pool.length, slots - roundStart);
-      const withinRound = index - roundStart;
-      const poolIndex = Math.floor((withinRound + 0.5) * pool.length / roundSize);
-      const id = pool[poolIndex].id;
-      counts.set(id, counts.get(id) + 1);
-    }
-  }
-  const prioritySlots = Math.min(remaining, preferred.length);
-  if (prioritySlots) distribute(preferred, prioritySlots);
-  remaining -= prioritySlots;
-  if (remaining) distribute(eligible, remaining);
-  return counts;
+function cycleOffsets(start, daySet) {
+  const first = Array.from({ length: 7 }, (_, offset) => offset)
+    .find(offset => daySet.has(weekday(addDays(start, offset))));
+  // Keep the two courses spaced across a full three-week cycle. Custom
+  // weekdays can move the second course a few days, without adding sessions.
+  const secondGap = [10, 9, 11, 8, 12, 13]
+    .find(gap => daySet.has(weekday(addDays(start, first + gap))));
+  return [first, first + secondGap];
 }
 
 export function validateConfig(config = {}) {
@@ -176,82 +145,57 @@ export function buildPlan(input = {}) {
   const sessions = [];
   const courseSchedules = {};
 
+  let phaseStart = start;
   for (let phaseIndex = 0; phaseIndex < activePhases.length; phaseIndex++) {
     const phase = activePhases[phaseIndex];
-    // Shift each entire stage by a whole week per preceding break. This keeps
-    // the original stage length, weekdays, and lesson/practice allocation.
-    const restOffset = phaseIndex * PHASE_REST_DAYS;
-    const phaseStart = phaseIndex === 0 ? start :
-      addDays(monthBoundary(start, PHASE_ENDS[phaseIndex - 1]), restOffset);
-    const phaseEndExclusive = addDays(monthBoundary(start, PHASE_ENDS[phaseIndex]), restOffset);
-    if (phaseIndex > 0) {
-      restPeriods.push({
-        afterPhaseId: activePhases[phaseIndex - 1].id,
-        beforePhaseId: phase.id,
-        startDate: iso(addDays(phaseStart, -PHASE_REST_DAYS)),
-        endDate: iso(addDays(phaseStart, -1)),
-        days: PHASE_REST_DAYS,
-      });
-    }
     const lessons = LESSONS.filter(lesson => lesson.phaseId === phase.id);
-    const selectedDates = [];
-    for (let time = phaseStart.getTime(); time < phaseEndExclusive.getTime(); time += DAY_MS) {
-      const day = new Date(time);
-      if (daySet.has(weekday(day))) selectedDates.push(day);
-    }
-    if (selectedDates.length < lessons.length) {
-      throw new RangeError(`The selected weekdays cannot cover every lesson in ${phase.title}`);
-    }
+    const cycleCount = Math.ceil(lessons.length / CADENCE.lessonsPerCycle);
+    const phaseEnd = addDays(phaseStart, cycleCount * CYCLE_DAYS - 1);
+    const offsets = cycleOffsets(phaseStart, daySet);
     phasePlans.push({
       ...phase,
       startDate: iso(phaseStart),
-      endDate: iso(addDays(phaseEndExclusive, -1)),
+      endDate: iso(phaseEnd),
       lessonIds: lessons.map(lesson => lesson.id),
     });
 
-    const lessonCounts = assignLessonCounts(lessons, selectedDates.length);
-    const lessonSlots = lessons.flatMap(lesson =>
-      Array.from({ length: lessonCounts.get(lesson.id) }, () => lesson));
-    const assigned = selectedDates.map((date, index) => ({ date, lesson: lessonSlots[index] }));
-    const partsByLesson = new Map();
-    for (const item of assigned) {
-      partsByLesson.set(item.lesson.id, (partsByLesson.get(item.lesson.id) ?? 0) + 1);
-    }
-    const partNumber = new Map();
-    for (const item of assigned) {
-      const { lesson, date } = item;
-      const part = (partNumber.get(lesson.id) ?? 0) + 1;
-      partNumber.set(lesson.id, part);
+    for (const [index, lesson] of lessons.entries()) {
+      const cycle = Math.floor(index / CADENCE.lessonsPerCycle);
+      const date = addDays(phaseStart, cycle * CYCLE_DAYS + offsets[index % CADENCE.lessonsPerCycle]);
       const dateText = iso(date);
       const session = {
-        id: `${lesson.id}-p${String(part).padStart(2, '0')}`,
+        id: `${lesson.id}-p01`,
         date: dateText,
         weekday: weekday(date),
         weekNumber: 0,
         phaseId: phase.id,
         lessonId: lesson.id,
-        part,
-        parts: partsByLesson.get(lesson.id),
+        part: 1,
+        parts: 1,
         minutes: config.sessionMinutes,
       };
       sessions.push(session);
-      let schedule = courseSchedules[lesson.id];
-      if (!schedule) {
-        schedule = courseSchedules[lesson.id] = {
-          startDate: dateText,
-          endDate: dateText,
-          sessionIds: [],
-        };
-      }
-      schedule.endDate = dateText;
-      schedule.sessionIds.push(session.id);
+      courseSchedules[lesson.id] = {
+        startDate: dateText,
+        endDate: dateText,
+        sessionIds: [session.id],
+      };
+    }
+
+    if (phaseIndex < activePhases.length - 1) {
+      restPeriods.push({
+        afterPhaseId: phase.id,
+        beforePhaseId: activePhases[phaseIndex + 1].id,
+        startDate: iso(addDays(phaseEnd, 1)),
+        endDate: iso(addDays(phaseEnd, PHASE_REST_DAYS)),
+        days: PHASE_REST_DAYS,
+      });
+      phaseStart = addDays(phaseEnd, PHASE_REST_DAYS + 1);
     }
   }
 
-  const endExclusive = addDays(monthBoundary(start, PHASE_ENDS[activePhases.length - 1]),
-    (activePhases.length - 1) * PHASE_REST_DAYS);
+  const lastDate = new Date(`${phasePlans.at(-1).endDate}T00:00:00.000Z`);
   const firstMonday = addDays(start, 1 - weekday(start));
-  const lastDate = addDays(endExclusive, -1);
   const weekCount = Math.floor((lastDate.getTime() - firstMonday.getTime()) / (7 * DAY_MS)) + 1;
   const weeks = Array.from({ length: weekCount }, (_, index) => {
     const monday = addDays(firstMonday, index * 7);
@@ -265,7 +209,7 @@ export function buildPlan(input = {}) {
     };
   });
   for (const session of sessions) {
-    const weekNumber = Math.floor((dateFromIso(session.date).getTime() - firstMonday.getTime()) / (7 * DAY_MS)) + 1;
+    const weekNumber = Math.floor((Date.parse(`${session.date}T00:00:00.000Z`) - firstMonday.getTime()) / (7 * DAY_MS)) + 1;
     session.weekNumber = weekNumber;
     const week = weeks[weekNumber - 1];
     week.sessions.push(session);
@@ -275,6 +219,7 @@ export function buildPlan(input = {}) {
 
   return {
     config,
+    cadence: CADENCE,
     startDate: config.startDate,
     endDate: iso(lastDate),
     phasePlans,
