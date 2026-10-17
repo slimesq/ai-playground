@@ -1,0 +1,14 @@
+{
+  "name": "rehab-study-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Course-based rehabilitation practice journal with repeatable check-ins",
+  "engines": { "node": ">=22.16.0" },
+  "scripts": {
+    "start": "node start.js",
+    "check": "node --check start.js && node --check server.js && node --check catalog.js && node --check public/app.js && node --check public/storage.js && node --check public/backup.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js"
+  },
+  "devDependencies": { "playwright": "1.59.1" }
+}

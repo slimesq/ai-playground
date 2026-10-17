@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#153f3b">
+  <meta name="description" content="按课程和训练组记录每一次练习，保留自己的训练过程。">
+  <title>训练手记 · 蛋壳健康课程</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20261016">
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon.png?v=20261016">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="stylesheet" href="./app.css?v=20261016-2">
+  <script type="module" src="./app.js?v=20261016-2"></script>
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">跳至训练目录</a>
+  <header class="site-header">
+    <a class="brand" href="#course/37378" aria-label="训练手记首页">
+      <img class="brand-mark" src="./favicon.svg?v=20261016" width="42" height="42" alt="">
+      <span><strong>训练手记</strong><small>蛋壳健康课程</small></span>
+    </a>
+    <div class="header-actions">
+      <span id="syncStatus" class="sync-status" role="status"></span>
+      <button id="settingsButton" class="icon-button" type="button" aria-label="同步与记录设置" title="同步与记录设置"></button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="course-sidebar" aria-label="课程选择">
+      <div class="sidebar-heading"><span>我的课程</span><span class="sidebar-count">04</span></div>
+      <nav id="courseNav"></nav>
+      <div class="sidebar-footer"><span class="small-mark"></span><span>每一次练习，都留有记录</span></div>
+    </aside>
+
+    <main id="mainContent" tabindex="-1">
+      <div id="courseHeader" class="course-header"></div>
+      <div class="content-panel">
+        <div class="panel-toolbar">
+          <div class="view-tabs" role="tablist" aria-label="课程视图">
+            <button id="catalogTab" type="button" role="tab" aria-selected="true" aria-controls="catalogPanel">训练目录</button>
+            <button id="historyTab" type="button" role="tab" aria-selected="false" aria-controls="historyPanel">打卡记录<span id="historyCount"></span></button>
+          </div>
+          <button id="sourceLink" type="button" class="text-button source-button">课程来源<span data-icon="external"></span></button>
+        </div>
+        <section id="catalogPanel" role="tabpanel" aria-labelledby="catalogTab">
+          <div class="catalog-tools">
+            <label class="search-field"><span data-icon="search"></span><input id="searchInput" type="search" placeholder="搜索四门课程中的动作或训练组" aria-label="搜索所有课程"><kbd>/</kbd></label>
+            <div class="filter-tabs" aria-label="按练习情况筛选">
+              <button type="button" data-filter="all" aria-pressed="true">全部</button>
+              <button type="button" data-filter="unpracticed" aria-pressed="false">未练过</button>
+              <button type="button" data-filter="practiced" aria-pressed="false">练过</button>
+            </div>
+          </div>
+          <div id="catalogSummary" class="catalog-summary" aria-live="polite"></div>
+          <div id="catalogContent" class="catalog-content"><div class="loading-state"><span class="loading-dot"></span>正在载入课程目录…</div></div>
+        </section>
+        <section id="historyPanel" role="tabpanel" aria-labelledby="historyTab" hidden>
+          <div class="history-toolbar"><p>按记录时间排列</p><button id="exportRecordsButton" type="button" class="text-button"><span data-icon="download"></span>导出记录</button></div>
+          <div id="historyContent"></div>
+        </section>
+      </div>
+      <footer class="main-footer"><span>按自己的节奏练习</span><span id="footerTotal"></span></footer>
+    </main>
+  </div>
+
+  <dialog id="checkinDialog" aria-labelledby="checkinTitle">
+    <form id="checkinForm">
+      <div class="dialog-heading"><div><span class="eyebrow" id="checkinCourse"></span><h2 id="checkinTitle">记录这次训练</h2></div><button class="icon-button close-dialog" type="button" aria-label="关闭"><span data-icon="close"></span></button></div>
+      <div class="dialog-body">
+        <div class="selection-heading"><strong id="checkinSection"></strong><button id="toggleAllLessons" type="button" class="text-button">取消全选</button></div>
+        <div id="checkinLessons" class="checkin-lessons"></div>
+        <label class="note-label" for="checkinNote">训练备注<span>选填</span></label>
+        <textarea id="checkinNote" maxlength="2000" rows="3" placeholder="这次练习的感受，或下次想注意的地方…"></textarea>
+        <p class="dialog-hint"><span data-icon="clock"></span>保存时自动记录本次打卡时间</p>
+        <p id="checkinError" class="field-error" role="alert"></p>
+      </div>
+      <div class="dialog-footer"><span id="selectedCount"></span><button id="saveCheckinButton" class="primary-button" type="submit"><span data-icon="check"></span>保存这次打卡</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog" aria-labelledby="settingsTitle">
+    <div class="dialog-heading"><div><span class="eyebrow">记录与同步</span><h2 id="settingsTitle">在不同设备继续练习</h2></div><button class="icon-button close-dialog" type="button" aria-label="关闭"><span data-icon="close"></span></button></div>
+    <div class="dialog-body">
+      <p class="settings-intro">记录会保存到服务器。另一台设备填入相同的同步码，就能看到你的训练记录。</p>
+      <label class="note-label" for="currentSyncKey">我的同步码</label>
+      <div class="sync-key-row"><input id="currentSyncKey" type="password" readonly autocomplete="off" aria-label="我的同步码"><button id="copySyncKey" class="secondary-button" type="button"><span data-icon="copy"></span>复制</button></div>
+      <p class="field-hint">请保存好同步码，持有码的人可以查看和修改这份记录。</p>
+      <form id="switchKeyForm" class="switch-key-form">
+        <label class="note-label" for="otherSyncKey">使用另一份同步码</label>
+        <div class="sync-key-row"><input id="otherSyncKey" type="password" placeholder="粘贴已有同步码" autocomplete="off" minlength="32" maxlength="96"><button id="switchKeyButton" class="secondary-button" type="submit">连接</button></div>
+        <p id="settingsError" class="field-error" role="alert"></p>
+      </form>
+      <section class="settings-backup" aria-labelledby="backupTitle">
+        <h3 id="backupTitle">文件备份</h3>
+        <p class="field-hint">保存四门课程的打卡记录，或从以前导出的文件恢复。</p>
+        <div class="backup-actions">
+          <button id="settingsExportButton" class="secondary-button" type="button"><span data-icon="download"></span>导出备份</button>
+          <input id="backupFile" class="file-input" type="file" accept="application/json,.json" aria-label="选择训练手记备份文件">
+          <label class="secondary-button file-button" for="backupFile"><span data-icon="upload"></span>导入备份</label>
+        </div>
+        <div id="importPreview" class="import-preview" hidden>
+          <div id="importSummary"></div>
+          <div class="import-actions"><button id="confirmImportButton" class="primary-button" type="button">合并导入</button><button id="cancelImportButton" class="text-button" type="button">取消</button></div>
+        </div>
+        <p id="backupFeedback" class="backup-feedback" role="status" aria-live="polite"></p>
+      </section>
+    </div>
+  </dialog>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
