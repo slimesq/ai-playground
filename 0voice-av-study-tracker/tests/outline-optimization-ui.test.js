@@ -281,6 +281,7 @@ test('empty and completed mobile outlines omit shortcuts with no actionable targ
 
 test('continue learning has one clear detail action', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
+  await page.clock.setFixedTime(new Date('2026-10-11T04:00:00Z')); // No Today card duplicates the Continue module on Sunday.
   const lsIds = await page.evaluate(() => allTasks.filter(task => task.track === 'ls').map(task => task.id));
   await seedEntries(page, Object.fromEntries(lsIds.map(id => [id, { done: true }])));
   const card = page.locator('#continueBox .continue-task');
@@ -297,14 +298,14 @@ test('outline week selector and next-work controls open only the relevant week',
     const tasks = allTasks.filter(task => task.track === 'ydy' && phaseForWeek(task.week).id === 'courses');
     return { all: tasks.map(task => task.id), partial: tasks.find(task => task.week === 10 && task.activity === 'practice').id,
       pending: tasks.find(task => task.week === 11 && task.activity === 'video').id,
-      weekEight: tasks.find(task => task.week === 8).id };
+      weekEight: tasks.find(task => task.week === 7).id };
   });
   await seedEntries(page, Object.fromEntries(target.all.map(id => [id,
     id === target.partial ? { done: false, progress: { kind: 'practice', workedMinutes: 15, completedSteps: [0] } }
       : { done: id !== target.pending }])));
   await page.locator('#progress-total-ydy').click();
   assert.equal(await page.locator('#weekTasks details.outline-week-group[open]').count(), 1, 'Long outlines start with one relevant week expanded');
-  await page.locator('#outlineWeekSelect').selectOption('8');
+  await page.locator('#outlineWeekSelect').selectOption('7');
   assert.equal(await weekGroupFor(page, target.weekEight).getAttribute('open'), '');
   assert.equal(await page.locator('#weekTasks details.outline-week-group[open]').count(), 1);
   await page.locator('#outlineNextPartialBtn').click();
@@ -322,7 +323,7 @@ test('Back and Forward restore an expanded week, task details, and scroll positi
   const group = weekGroupFor(page, id);
   assert.equal(await group.getAttribute('open'), '');
   const details = page.locator(`#weekTasks details.task-outline-content[data-outline-task-id="${id}"]`);
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   assert.equal(await details.getAttribute('open'), '');
   await page.evaluate(() => window.scrollTo(0, Math.min(650, document.documentElement.scrollHeight - innerHeight)));
   const priorScroll = await page.evaluate(() => window.scrollY);
@@ -381,7 +382,7 @@ test('saved record links open safely while punctuation and markup stay outside l
     const stamp = freshTimestamp();
     state.entries[practice] = createEntry(true, stamp, undefined,
       { kind: 'practice', workedMinutes: 20, completedSteps: [0], note });
-    state.entries['milestone:yibo'] = createEntry(false, stamp, note);
+    state.entries[milestoneReviewKey('yibo')] = createEntry(false, stamp, note);
     localRevision++;
     saveState(); render();
   }, { practice, note });
@@ -395,7 +396,10 @@ test('saved record links open safely while punctuation and markup stay outside l
   assert.equal(await readonlyNote.count(), 1);
   await page.locator('#closeTaskBtn').click();
   await page.locator('.nav-item[data-view="milestones"]').click();
-  const reviewNote = page.locator('#milestones [data-milestone-id="yibo"] .goal-review p');
+  const reviewKey = await page.evaluate(() => milestoneReviewKey('yibo'));
+  const reviewRecord = page.locator(`#milestones [data-milestone-id="yibo"] [data-historical-review-key="${reviewKey}"]`);
+  await reviewRecord.locator('xpath=ancestor::details[1]').locator(':scope > summary').click();
+  const reviewNote = reviewRecord.locator('p').filter({ hasText: '演示' });
   assert.equal(await reviewNote.count(), 1);
   for (const container of [outlineNote, readonlyNote, reviewNote]) {
     assert.deepEqual(await container.locator('a.record-link').evaluateAll(links => links.map(link => link.getAttribute('href'))),
@@ -459,9 +463,12 @@ test('scoped and search views keep one visible title and history restores visibl
   await page.locator('.nav-item[data-view="planner"]').click();
   assert.equal(await page.locator('.planner-topbar').isVisible(), true);
   assert.match(await page.locator('#planPhaseCaption').textContent(), /2026年.*2027年/);
-  assert.doesNotMatch(await page.locator('#planPhaseCaption').textContent(), /课程计划|项目深化|\d+\s*周/);
-  assert.match(await page.locator('#phase-courses').textContent(), /34\s*周/);
-  assert.match(await page.locator('#phase-projects').textContent(), /18\s*周/);
+  assert.doesNotMatch(await page.locator('#planPhaseCaption').textContent(), /课程计划|项目深化|作品打磨|\d+\s*周/);
+  for (const phase of await page.evaluate(() => planPhases.map(item => ({ id: item.id, weeks: phaseWeeks(item).length, countLabel: item.countLabel })))) {
+    const label = await page.locator(`#phase-${phase.id}`).textContent();
+    if (phase.countLabel) assert.ok(label.includes(phase.countLabel));
+    else assert.match(label, new RegExp(`${phase.weeks}\\s*周`));
+  }
   await page.locator('#taskSearch').fill('FLV');
   assert.equal(await page.locator('.planner-topbar').isVisible(), false);
   assert.equal(await page.locator('#pageSubtitle').isVisible(), false);
@@ -483,19 +490,21 @@ test('scoped and search views keep one visible title and history restores visibl
     'Returning to a scoped view must not focus its hidden weekly heading');
 });
 
-test('milestone summary distinguishes the next project from tasks done but not yet accepted', { timeout: 30_000 }, async t => {
+test('milestone summary advances after required completion and returns when selftest is reopened', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
   await page.locator('.nav-item[data-view="milestones"]').click();
   const yibo = page.locator('#milestones [data-milestone-id="yibo"]');
   assert.match(await page.locator('#milestoneSummary .roadmap-next small').textContent(), /下一项目目标/);
-  await yibo.locator('[data-milestone-review]').click();
-  assert.equal(await page.locator('#milestoneReviewDialog').isVisible(), true, 'Early acceptance can be recorded before all tasks are checked');
-  await page.locator('#closeMilestoneReviewBtn').click();
+  assert.equal(await yibo.locator('[data-milestone-review]').count(), 0, 'The project has no separate acceptance action');
   const ids = await page.evaluate(() => DATA.milestones.find(goal => goal.id === 'yibo').taskIds);
   await seedEntries(page, Object.fromEntries(ids.map(id => [id, { done: true }])));
-  assert.match(await yibo.locator('.goal-status').textContent(), /待验收/);
-  assert.match(await page.locator('#milestoneSummary .roadmap-next small').textContent(), /下一项待验收/);
-  assert.equal(await yibo.locator('[data-milestone-review]').isEnabled(), true);
+  assert.equal(await yibo.locator('.goal-status').textContent(), '已完成');
+  assert.match(await page.locator('#milestoneSummary .roadmap-next strong').textContent(), /云助教/);
+  assert.match(await page.locator('#milestoneSummary .roadmap-completed strong').textContent(), /1 \/ 3/);
+  await seedEntries(page, { 'edoyun-module-v1-yibo-selftest': { done: false } });
+  assert.notEqual(await yibo.locator('.goal-status').textContent(), '已完成');
+  assert.match(await page.locator('#milestoneSummary .roadmap-next strong').textContent(), /易播/);
+  assert.match(await page.locator('#milestoneSummary .roadmap-completed strong').textContent(), /0 \/ 3/);
 });
 
 async function reloadOutline(page) {
@@ -512,14 +521,14 @@ test('refresh restores the outline scope, located week, expanded task and cursor
   const page = await pageAt(t);
   const sample = await page.evaluate(() => {
     const id = DATA.milestones.find(goal => goal.id === 'yibo').taskIds
-      .find(id => taskById.get(id).week === 8 && taskById.get(id).activity === 'practice');
+      .find(id => taskById.get(id).week === 7 && taskById.get(id).activity === 'practice');
     return { id, week: taskById.get(id).week };
   });
   await page.locator('#projectProgressDetails > summary').click();
   await page.locator('#progress-project-total-yibo').click();
   await page.locator('#outlineWeekSelect').selectOption(String(sample.week));
   const details = page.locator(`#weekTasks .task-outline-content[data-outline-task-id="${sample.id}"]`);
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await details.scrollIntoViewIfNeeded();
   await page.waitForFunction(() => Math.abs(JSON.parse(localStorage.getItem(UI_STORE_KEY))?.outlineState?.scroll - scrollY) < 2);
   await page.waitForFunction(id => JSON.parse(localStorage.getItem(UI_STORE_KEY))?.outlineState?.tasks?.includes(id), sample.id);
@@ -565,19 +574,19 @@ test('expired outline weeks and foreign task ids are discarded without changing 
   const page = await pageAt(t);
   const sample = await page.evaluate(() => {
     const ids = DATA.milestones.find(goal => goal.id === 'yibo').taskIds;
-    const id = ids.find(id => taskById.get(id).week === 8 && taskById.get(id).activity === 'practice');
+    const id = ids.find(id => taskById.get(id).week === 7 && taskById.get(id).activity === 'practice');
     const foreign = allTasks.find(task => task.track === 'ls' && task.week === 8).id;
-    return { id, foreign, ids, week: 8, scope: { phase: 'courses', track: 'ydy', project: 'yibo' } };
+    return { id, foreign, ids, week: 7, scope: { phase: 'courses', track: 'ydy', project: 'yibo' } };
   });
   await page.evaluate(sample => localStorage.setItem(UI_STORE_KEY, JSON.stringify({
     view: 'planner', phase: 'courses', week: 1, filter: 'all', track: 'ydy', search: '',
     progressScope: sample.scope,
-    outlineState: { scope: JSON.stringify(sample.scope), weeks: [8, 35, 9999],
+    outlineState: { scope: JSON.stringify(sample.scope), weeks: [7, 35, 9999],
       tasks: [sample.id, sample.foreign, 'removed-task-id'], cursor: sample.foreign }
   })), sample);
   await reloadOutline(page);
   assert.deepEqual(await page.evaluate(() => progressListScope), sample.scope);
-  assert.deepEqual(await outlineIds(page), sample.ids);
+  assert.deepEqual((await outlineIds(page)).sort(), [...sample.ids].sort(), 'Stale navigation state cannot add or remove tasks from the selected project');
   assert.equal(await weekGroupFor(page, sample.id).getAttribute('open'), '');
   assert.equal(await page.locator(`.task-outline-content[data-outline-task-id="${sample.id}"]`).getAttribute('open'), '');
   assert.equal(await page.locator('#weekTasks .outline-week-group[data-result-week="35"], #weekTasks .outline-week-group[data-result-week="9999"]').count(), 0);
@@ -589,18 +598,18 @@ test('saved outline expansion from another scope cannot leak into a reopened pro
   const page = await pageAt(t);
   const sample = await page.evaluate(() => {
     const ids = DATA.milestones.find(goal => goal.id === 'yibo').taskIds;
-    const id = ids.find(id => taskById.get(id).week === 8 && taskById.get(id).activity === 'practice');
+    const id = ids.find(id => taskById.get(id).week === 7 && taskById.get(id).activity === 'practice');
     return { id, ids, scope: { phase: 'courses', track: 'ydy', project: 'yibo' },
       staleScope: { phase: 'courses', track: 'ls', project: '' } };
   });
   await page.evaluate(sample => localStorage.setItem(UI_STORE_KEY, JSON.stringify({
     view: 'planner', phase: 'courses', week: 1, filter: 'all', track: 'ydy', search: '',
     progressScope: sample.scope,
-    outlineState: { scope: JSON.stringify(sample.staleScope), weeks: [8], tasks: [sample.id], cursor: sample.id }
+    outlineState: { scope: JSON.stringify(sample.staleScope), weeks: [7], tasks: [sample.id], cursor: sample.id }
   })), sample);
   await reloadOutline(page);
   assert.deepEqual(await page.evaluate(() => progressListScope), sample.scope);
-  assert.deepEqual(await outlineIds(page), sample.ids);
+  assert.deepEqual((await outlineIds(page)).sort(), [...sample.ids].sort(), 'A foreign saved scope cannot add or remove tasks from the selected project');
   assert.equal(await page.locator(`.task-outline-content[data-outline-task-id="${sample.id}"]`).getAttribute('open'), null,
     'Task expansion belongs to its saved scope, even when a stored id happens to exist in the current scope');
   assert.equal(await weekGroupFor(page, sample.id).getAttribute('open'), null,
@@ -658,12 +667,15 @@ test('milestone evidence links keep their project focus across mock sync and dis
   const href = 'https://example.com/shared-demo';
   await page.evaluate(({ sample, href }) => {
     const stamp = freshTimestamp();
-    for (const id of sample) state.entries[`milestone:${id}`] = createEntry(false, stamp, `演示 ${href}`);
+    for (const id of sample) state.entries[milestoneReviewKey(id)] = createEntry(false, stamp, `演示 ${href}`);
     localRevision++; saveState(); render();
   }, { sample, href });
   await page.locator('.nav-item[data-view="milestones"]').click();
   const target = sample[1];
-  const link = page.locator(`#milestones [data-milestone-id="${target}"] .goal-review .record-link`);
+  const targetKey = await page.evaluate(id => milestoneReviewKey(id), target);
+  const record = page.locator(`#milestones [data-milestone-id="${target}"] [data-historical-review-key="${targetKey}"]`);
+  await record.locator('xpath=ancestor::details[1]').locator(':scope > summary').click();
+  const link = record.locator('.record-link');
   await link.focus();
   await syncRecordRefresh(page);
   assert.equal(await link.evaluate(element => element === document.activeElement), true,
@@ -671,10 +683,10 @@ test('milestone evidence links keep their project focus across mock sync and dis
   await page.unroute('**/api/sync');
   await page.route('**/api/sync', route => {
     const entries = route.request().postDataJSON().state.entries;
-    const current = entries[`milestone:${target}`];
-    entries[`milestone:${target}`] = { ...current, evidence: '网址已移除',
+    const current = entries[targetKey];
+    entries[targetKey] = { ...current, evidence: '网址已移除',
       updatedAt: new Date(Date.parse(current.updatedAt) + 60_000).toISOString() };
-    return route.fulfill({ json: { state: { entries }, serverTime: entries[`milestone:${target}`].updatedAt } });
+    return route.fulfill({ json: { state: { entries }, serverTime: entries[targetKey].updatedAt } });
   });
   await syncRecordRefresh(page);
   assert.equal(await link.count(), 0);
@@ -688,7 +700,7 @@ async function scopedFilterFixture(page) {
     const tasks = DATA.milestones.find(goal => goal.id === 'yibo').taskIds.map(id => taskById.get(id));
     return {
       done: tasks.find(task => task.week === 1 && task.activity === 'video').id,
-      partial: tasks.find(task => task.week === 8 && task.activity === 'practice').id,
+      partial: tasks.find(task => task.week === 7 && task.activity === 'practice').id,
       pending: tasks.find(task => task.week === 6 && task.activity === 'practice').id,
       scope: { phase: 'courses', track: 'ydy', project: 'yibo' }
     };
@@ -717,7 +729,7 @@ async function locateFilterReading(page, filter, id, week, desiredScroll) {
   await page.locator('#taskFilter').selectOption(filter);
   await page.locator('#outlineWeekSelect').selectOption(String(week));
   const details = page.locator(`#weekTasks .task-outline-content[data-outline-task-id="${id}"]`);
-  if (await details.getAttribute('open') === null) await details.locator('summary').click();
+  if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click();
   await page.evaluate(top => window.scrollTo({
     top: Math.min(top, Math.max(0, document.documentElement.scrollHeight - innerHeight)), behavior: 'instant'
   }), desiredScroll);
@@ -745,14 +757,14 @@ async function assertFilterReading(page, expected, message) {
 test('completion filters keep separate reading positions across switching and refresh', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
   const sample = await scopedFilterFixture(page);
-  const all = await locateFilterReading(page, 'all', sample.partial, 8, 420);
+  const all = await locateFilterReading(page, 'all', sample.partial, 7, 420);
   const done = await locateFilterReading(page, 'done', sample.done, 1, 0);
   assert.equal(await page.locator('#weekTasks .outline-week-group').count(), 1,
-    'The completed view must exercise the regression where week 8 is filtered out');
+    'The completed view must exercise the regression where the final module week is filtered out');
   await page.locator('#taskFilter').selectOption('all');
   await assertFilterReading(page, all, 'Returning from completed to all');
   const pending = await locateFilterReading(page, 'pending', sample.pending, 6, 260);
-  const partial = await locateFilterReading(page, 'partial', sample.partial, 8, 100);
+  const partial = await locateFilterReading(page, 'partial', sample.partial, 7, 100);
   for (const expected of [all, pending, partial, done]) {
     await page.locator('#taskFilter').selectOption(expected.filter);
     await assertFilterReading(page, expected, `Returning to ${expected.filter}`);
@@ -769,7 +781,7 @@ test('completion filters keep separate reading positions across switching and re
 test('Back and Forward restore the correct completion filter reading state', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
   const sample = await scopedFilterFixture(page);
-  const all = await locateFilterReading(page, 'all', sample.partial, 8, 420);
+  const all = await locateFilterReading(page, 'all', sample.partial, 7, 420);
   const done = await locateFilterReading(page, 'done', sample.done, 1, 0);
   // Changing the status and explicitly locating its week are separate browsing positions.
   for (let step = 0; step < 2; step++) {
@@ -786,37 +798,35 @@ test('Back and Forward restore the correct completion filter reading state', { t
   await assertFilterReading(page, all, 'Switching filters after history restoration');
 });
 
-test('application preparation keeps dates and three static steps without repeated completion statuses', { timeout: 30_000 }, async t => {
+test('application preparation waits for the teacher-confirmed resume without promising fixed dates', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
   await page.locator('.nav-item[data-view="milestones"]').click();
   const application = page.locator('#applicationMilestone');
-  const dates = await page.evaluate(() => [DATA.applicationMilestone.start, DATA.applicationMilestone.end]);
-  assert.deepEqual(await application.locator('.application-dates time').evaluateAll(items => items.map(item => item.getAttribute('datetime'))), dates);
-  assert.equal(await application.locator('.application-requirements, .application-requirement').count(), 0,
-    'Task and acceptance statuses already belong to their milestone cards');
-  const preparation = application.locator('ol, ul');
-  assert.equal(await preparation.count(), 1, 'Application preparation has one concise checklist');
-  assert.equal(await preparation.locator('li').count(), 3);
-  const steps = await preparation.locator('li').allTextContents();
-  assert.ok(steps.every(step => step.trim().length > 0));
-  assert.match(await application.textContent(), /提前投递/,
-    'An unfinished study plan still explains that applications may start early');
-  assert.equal(await page.evaluate(() => allTasks.every(task => taskDone(task.id))), false);
-  assert.equal(await page.evaluate(() => DATA.milestones.filter(goal => goal.kind === 'project').every(goal => milestoneReview(goal)?.done)), false);
-  const ids = await page.evaluate(() => DATA.applicationMilestone.prerequisiteIds
-    .flatMap(id => milestoneTasks(DATA.milestones.find(goal => goal.id === id)).map(task => task.id)));
-  await seedEntries(page, Object.fromEntries(ids.map(id => [id, { done: true }])));
-  assert.deepEqual(await preparation.locator('li').allTextContents(), steps,
-    'Preparation steps stay useful and static when check-in progress changes');
-  assert.equal(await application.locator('.application-requirements, .application-requirement').count(), 0);
-  assert.deepEqual(await application.locator('.application-dates time').evaluateAll(items => items.map(item => item.getAttribute('datetime'))), dates);
-  assert.match(await application.textContent(), /提前投递/);
+  const workflow = await page.evaluate(() => DATA.careerWorkflow);
+  assert.equal(await application.locator('.application-dates time').count(), 0,
+    'Teacher delivery and application timing have no promised calendar date');
+  assert.match(await application.textContent(), /老师.*简历|简历.*老师/);
+  const readinessIds = await page.evaluate(() => DATA.applicationMilestone.readinessTaskIds);
+  assert.deepEqual(readinessIds, [...workflow.preparationTaskIds, workflow.teacherTaskId]);
+  assert.equal(await application.locator('li[data-task-id]').count(), readinessIds.length);
+  const labels = await application.locator('li[data-task-id] button').allTextContents();
+  const learningIds = await page.evaluate(() => requiredLearningTasks().map(task => task.id));
+  await seedEntries(page, Object.fromEntries([...learningIds, ...workflow.preparationTaskIds].map(id => [id, { done: true }])));
+  assert.equal(await page.evaluate(() => applicationReadiness().ready), false,
+    'Prepared materials do not imply the teacher conversation or customized resume is confirmed');
+  assert.equal(await page.evaluate(id => taskDone(id), workflow.teacherTaskId), false);
+  await seedEntries(page, { [workflow.teacherTaskId]: { done: true } });
+  assert.equal(await page.evaluate(() => applicationReadiness().ready), true);
+  assert.deepEqual(await application.locator('li[data-task-id] button').allTextContents(), labels);
+  assert.equal(await application.locator('.application-dates time').count(), 0);
+  assert.equal(await page.evaluate(ids => ids.some(id => taskDone(id)), workflow.interviewTaskIds), false,
+    'Application materials can be ready before every later interview exercise is finished');
 });
 
 test('reopening the same progress count resumes its filter-specific outline reading', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
   const sample = await scopedFilterFixture(page);
-  const all = await locateFilterReading(page, 'all', sample.partial, 8, 420);
+  const all = await locateFilterReading(page, 'all', sample.partial, 7, 420);
   const done = await locateFilterReading(page, 'done', sample.done, 1, 120);
   await page.locator('.nav-item[data-view="overview"]').click();
   await page.locator('#progress-project-total-yibo').click();
@@ -834,7 +844,7 @@ test('reopening the same progress count resumes its filter-specific outline read
 test('ordinary navigation resumes an outline without overwriting it with the other page scroll', { timeout: 30_000 }, async t => {
   const page = await pageAt(t, 390);
   const sample = await scopedFilterFixture(page);
-  const expected = await locateFilterReading(page, 'all', sample.partial, 8, 520);
+  const expected = await locateFilterReading(page, 'all', sample.partial, 7, 520);
   for (const view of ['overview', 'milestones']) {
     await page.locator(`.nav-item[data-view="${view}"]`).click();
     await page.evaluate(() => window.scrollTo({ top: 900, behavior: 'instant' }));
@@ -870,14 +880,16 @@ for (const track of ['ls', 'ydy', 'review']) {
   test(`Continue records show all completed ${track} tasks across the plan and allow correcting a check-in`, { timeout: 30_000 }, async t => {
     const page = await pageAt(t);
     const fixture = await page.evaluate(track => {
-      const tasks = allTasks.filter(task => task.track === track);
+      const tasks = requiredTasks().filter(task => task.track === track);
       const stamp = freshTimestamp();
+      if (track === 'review') for (const task of requiredLearningTasks()) state.entries[task.id] = createEntry(true, stamp);
       for (const task of tasks) state.entries[task.id] = createEntry(true, stamp, `成果 https://example.com/record/${task.id}`);
       localRevision++; saveState();
-      selectWeek(38);
+      const originWeek = planPhases.find(phase => phase.id === 'career').endWeek;
+      selectWeek(originWeek);
       activateView('overview');
       continueTrackChoice = track; renderContinue();
-      return { ids: tasks.map(task => task.id), last: tasks.at(-1).id,
+      return { ids: tasks.map(task => task.id), last: tasks.at(-1).id, originWeek,
         phases: [...new Set(tasks.map(task => phaseForWeek(task.week).id))] };
     }, track);
     assert.match(await page.locator('#continueBox').textContent(), /这一方向已全部打卡/);
@@ -889,8 +901,9 @@ for (const track of ['ls', 'ydy', 'review']) {
     assert.equal(await page.locator('#weekTasks a.record-link').count(), fixture.ids.length, 'Each saved result link is available');
     const labels = await page.locator('#weekTasks .outline-week-summary h3').allTextContents();
     if (fixture.phases.length > 1) {
-      assert.ok(labels.some(label => label.startsWith('课程计划')));
-      assert.ok(labels.some(label => label.startsWith('项目深化')));
+      for (const label of await page.evaluate(phases => planPhases.filter(phase => phases.includes(phase.id)).map(phase => phase.label), fixture.phases)) {
+        assert.ok(labels.some(text => text.startsWith(label)));
+      }
     }
     const lastWeek = await page.evaluate(id => taskById.get(id).week, fixture.last);
     await page.locator('#outlineWeekSelect').selectOption(String(lastWeek));
@@ -903,27 +916,38 @@ for (const track of ['ls', 'ydy', 'review']) {
     assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'all', track, project: '' });
     assert.deepEqual(await outlineIds(page), fixture.ids, 'All-phase records survive refresh');
     assert.equal(await page.locator('#outlineWeekSelect').inputValue(), String(lastWeek));
+    const opensModule = await last.locator('.outline-check').getAttribute('data-task-action') === 'details';
     await last.locator('.outline-check').click();
+    if (opensModule) {
+      await page.locator('#detailToggleBtn').click();
+      await page.locator('#closeTaskBtn').click();
+    }
     await page.waitForFunction(id => !taskDone(id), fixture.last);
     assert.deepEqual(await outlineIds(page), fixture.ids.filter(id => id !== fixture.last), 'Cancelled check-ins leave the completed records list');
     assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'all', track, project: '' });
     await page.locator('#exitProgressListBtn').click();
-    assert.equal(await page.locator('#weekSelect').inputValue(), '38', 'Returning to the week restores the original phase and week');
+    assert.equal(await page.locator('#weekSelect').inputValue(), String(fixture.originWeek), 'Leaving records preserves the original reference position');
+    assert.match(await page.locator('#plannerView').getAttribute('class'), /\bis-career-plan\b/,
+      'Leaving a global records outline returns to the shared career reference-week cards');
+    assert.deepEqual(await page.locator('#weekTasks .day-group .task-card').evaluateAll(cards => cards.map(card => card.dataset.taskId)),
+      await page.evaluate(() => scheduledTasksForWeek(selectedWeekData()).map(task => task.id)));
+    assert.equal(await page.locator('.week-navigation').isVisible(), true);
   });
 }
 
-test('Back and Forward preserve all-phase records and their located deepening week', { timeout: 30_000 }, async t => {
+test('Back and Forward preserve all-phase records and their located original-project week', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
   const sample = await page.evaluate(() => {
-    const tasks = allTasks.filter(task => task.track === 'ydy');
+    const tasks = requiredTasks().filter(task => task.track === 'ydy');
     const stamp = freshTimestamp();
     for (const task of tasks) state.entries[task.id] = createEntry(true, stamp);
     localRevision++; saveState();
     continueTrackChoice = 'ydy'; renderContinue();
-    return tasks.find(task => task.week === 38).id;
+    const task = tasks.find(task => task.projectId === 'studio-course' && task.activity === 'practice');
+    return { id: task.id, week: task.week };
   });
   await page.locator('#continueBox [data-continue-records]').click();
-  const expected = await locateFilterReading(page, 'done', sample, 38, 420);
+  const expected = await locateFilterReading(page, 'done', sample.id, sample.week, 420);
   await page.locator('.nav-item[data-view="milestones"]').click();
   await page.locator('#navigationBackBtn').click();
   await page.waitForFunction(() => !locationNavigationBusy && !restoringLocation);
@@ -940,7 +964,7 @@ test('Back and Forward preserve all-phase records and their located deepening we
 test('clearing an outline status filter keeps the resumed position after focus, re-entry and refresh', { timeout: 30_000 }, async t => {
   const page = await pageAt(t, 390);
   const sample = await scopedFilterFixture(page);
-  const expected = await locateFilterReading(page, 'all', sample.partial, 8, 520);
+  const expected = await locateFilterReading(page, 'all', sample.partial, 7, 520);
   await page.locator('#taskFilter').selectOption('done');
   await page.locator('#clearFiltersBtn').click();
   // Focus can trigger a smooth scroll that overwrites the saved position after the action returns.
@@ -956,7 +980,7 @@ test('clearing an outline status filter keeps the resumed position after focus, 
 
 test('a note-only practice record is visible in details, outlines and weekday and weekend recommendations', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
-  const id = 'av59-sat5-v1-w01-practice';
+  const id = 'edoyun-module-v1-yibo-environment-ipc';
   const note = '已检查构建配置 https://example.com/build';
   await page.evaluate(id => openTaskDetails(id), id);
   await page.locator('#taskProgressNote').fill(note);
@@ -977,23 +1001,24 @@ test('a note-only practice record is visible in details, outlines and weekday an
   await page.locator('.nav-item[data-view="milestones"]').click();
   const milestone = page.locator('[data-milestone-id="yibo"]');
   assert.equal(await milestone.locator('.goal-status').textContent(), '进行中');
-  assert.equal(await milestone.locator('.goal-progress-label > strong').textContent(), '0 / 20');
+  assert.equal(await milestone.locator('.goal-progress-label > strong').textContent(), `0 / ${await page.evaluate(() => DATA.milestones.find(item => item.id === 'yibo').taskIds.length)}`);
   await page.evaluate(() => {
     const stamp = freshTimestamp();
     for (const task of allTasks.filter(task => task.track === 'ls')) state.entries[task.id] = createEntry(true, stamp);
-    state.entries['av59-sat5-v1-w01-watch'] = createEntry(true, stamp);
+    state.entries['ydy5h-v1-w01-yibo'] = createEntry(true, stamp);
     localRevision++; saveState(); activateView('overview');
   });
-  const recommended = page.locator('#continueBox .continue-task');
+  const recommended = page.locator(`#continueBox .continue-task[data-task-id="${id}"], #todayBox [data-task-id="${id}"]`);
   assert.equal(await recommended.getAttribute('data-task-id'), id);
-  assert.equal(await recommended.locator('.continue-session-note').textContent(), '已存学习记录');
+  assert.equal(await recommended.locator('.continue-session-note, .task-progress-note').textContent(), '已存学习记录');
   assert.equal(await page.evaluate(id => taskProgress(id).workedMinutes, id), 0);
   assert.equal(await page.evaluate(id => taskDone(id), id), false);
   await page.clock.setFixedTime(new Date('2026-10-17T04:00:00Z'));
   await page.evaluate(() => render());
   assert.equal(await recommended.getAttribute('data-task-id'), id);
-  assert.equal(await recommended.locator('.continue-session-note').textContent(), '已存学习记录');
-  await recommended.locator('[data-task-action="toggle"]').click();
+  assert.equal(await recommended.locator('.continue-session-note, .task-progress-note').textContent(), '已存学习记录');
+  await recommended.locator('[data-task-action="details"]').first().click();
+  await page.locator('#detailToggleBtn').click();
   await page.waitForFunction(id => taskDone(id), id);
   await page.evaluate(id => openTaskDetails(id), id);
   assert.equal(await page.locator('#detailTaskStatus').textContent(), '已打卡');
@@ -1006,8 +1031,8 @@ test('a note-only practice record is visible in details, outlines and weekday an
 test('milestones distinguish empty progress from minutes, steps, notes and video stops without increasing completion', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
   await page.locator('.nav-item[data-view="milestones"]').click();
-  const practice = 'av59-sat5-v1-w01-practice';
-  const video = 'av59-sat5-v1-w01-watch';
+  const practice = 'edoyun-module-v1-yibo-environment-ipc';
+  const video = 'ydy5h-v1-w01-yibo';
   const cases = [
     { id: practice, progress: { kind: 'practice' }, status: '未开始' },
     { id: practice, progress: { kind: 'practice', workedMinutes: 0, completedSteps: [], note: '  \n ' }, status: '未开始' },
@@ -1024,13 +1049,13 @@ test('milestones distinguish empty progress from minutes, steps, notes and video
       [fixture.id]: { done: false, progress: fixture.progress }
     });
     assert.equal(await card.locator('.goal-status').textContent(), fixture.status);
-    assert.equal(await card.locator('.goal-progress-label > strong').textContent(), '0 / 20');
+    assert.equal(await card.locator('.goal-progress-label > strong').textContent(), `0 / ${await page.evaluate(() => DATA.milestones.find(item => item.id === 'yibo').taskIds.length)}`);
     assert.equal(await card.locator('.goal-meter').getAttribute('aria-valuenow'), '0');
     assert.equal(await page.evaluate(() => allTasks.filter(task => taskDone(task.id)).length), 0);
   }
 });
 
-test('partial milestone progress preserves parallel, overdue, checked and acceptance status rules', { timeout: 30_000 }, async t => {
+test('milestones preserve partial and overdue rules while old review flags cannot override required completion', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
   const sample = await page.evaluate(() => {
     const goal = DATA.milestones.find(item => item.id === 'yibo');
@@ -1039,7 +1064,7 @@ test('partial milestone progress preserves parallel, overdue, checked and accept
   });
   await seedEntries(page, {
     [sample.ls]: { done: false, progress: { kind: 'video', segmentIndex: 0, positionSecond: 60 } },
-    'av59-sat5-v1-w01-practice': { done: false, progress: { kind: 'practice', workedMinutes: 60, completedSteps: [] } }
+    'edoyun-module-v1-yibo-environment-ipc': { done: false, progress: { kind: 'practice', workedMinutes: 60, completedSteps: [] } }
   });
   await page.locator('.nav-item[data-view="milestones"]').click();
   const courses = page.locator('[data-milestone-id="courses"]');
@@ -1050,19 +1075,20 @@ test('partial milestone progress preserves parallel, overdue, checked and accept
   await page.clock.setFixedTime(new Date(`${sample.date}T04:00:00Z`));
   await page.evaluate(() => render());
   assert.equal(await yibo.locator('.goal-status').textContent(), '待补');
-  assert.equal(await yibo.locator('.goal-progress-label > strong').textContent(), '0 / 20');
+  assert.equal(await yibo.locator('.goal-progress-label > strong').textContent(), `0 / ${await page.evaluate(() => DATA.milestones.find(item => item.id === 'yibo').taskIds.length)}`);
   await seedEntries(page, Object.fromEntries(sample.ids.map(id => [id, { done: true }])));
-  assert.equal(await yibo.locator('.goal-status').textContent(), '待验收');
-  assert.equal(await yibo.locator('.goal-progress-label > strong').textContent(), '20 / 20');
-  await seedEntries(page, { 'milestone:yibo': { done: true } });
-  assert.equal(await yibo.locator('.goal-status').textContent(), '已验收');
+  assert.equal(await yibo.locator('.goal-status').textContent(), '已完成');
+  assert.equal(await yibo.locator('.goal-progress-label > strong').textContent(), `${sample.ids.length} / ${sample.ids.length}`);
+  const reviewKey = await page.evaluate(() => milestoneReviewKey('yibo'));
+  await seedEntries(page, { [reviewKey]: { done: true } });
+  assert.equal(await yibo.locator('.goal-status').textContent(), '已完成');
   await seedEntries(page, Object.fromEntries(sample.ids.map(id => [id, { done: false }])));
-  assert.equal(await yibo.locator('.goal-status').textContent(), '已验收', 'Early acceptance remains independent of task check-ins');
-  assert.equal(await yibo.locator('.goal-progress-label > strong').textContent(), '0 / 20');
+  assert.equal(await yibo.locator('.goal-status').textContent(), '待补', 'An old review cannot hide reopened required tasks');
+  assert.equal(await yibo.locator('.goal-progress-label > strong').textContent(), `0 / ${await page.evaluate(() => DATA.milestones.find(item => item.id === 'yibo').taskIds.length)}`);
 });
 
 test('practice progress toast leaves manual completion reachable and each Undo restores only its own change', { timeout: 90_000 }, async t => {
-  const id = 'av59-sat5-v1-w01-practice';
+  const id = 'edoyun-module-v1-yibo-environment-ipc';
   for (const width of [320, 390, 1280]) {
     const page = await pageAt(t, width);
     await page.evaluate(taskId => openTaskDetails(taskId), id);
@@ -1104,7 +1130,7 @@ test('practice progress toast leaves manual completion reachable and each Undo r
 
 test('a pending Undo follows the topmost confirmation and returns to the task, then the page', { timeout: 30_000 }, async t => {
   const page = await pageAt(t, 390);
-  await page.evaluate(id => openTaskDetails(id), 'av59-sat5-v1-w01-practice');
+  await page.evaluate(id => openTaskDetails(id), 'edoyun-module-v1-yibo-environment-ipc');
   await page.locator('#practiceSessionMinutes').fill('40');
   await page.locator('[data-progress-action="save-practice"]').click();
   await page.locator('#taskDialog .toast-action').waitFor();
@@ -1129,7 +1155,7 @@ test('a pending Undo follows the topmost confirmation and returns to the task, t
 
 test('Escape from a focused Undo restores keyboard focus after cancelling a dirty-exit confirmation', { timeout: 30_000 }, async t => {
   const page = await pageAt(t, 390);
-  const id = 'av59-sat5-v1-w01-practice';
+  const id = 'edoyun-module-v1-yibo-environment-ipc';
   await page.evaluate(taskId => openTaskDetails(taskId), id);
   await page.locator('#practiceSessionMinutes').fill('40');
   await page.locator('[data-progress-action="save-practice"]').click();
@@ -1158,7 +1184,7 @@ test('Escape from a focused Undo restores keyboard focus after cancelling a dirt
 
 test('a long mobile toast wraps without hiding task controls or leaving an empty footer spacer', { timeout: 30_000 }, async t => {
   const page = await pageAt(t, 320);
-  await page.evaluate(id => openTaskDetails(id), 'av59-sat5-v1-w01-practice');
+  await page.evaluate(id => openTaskDetails(id), 'edoyun-module-v1-yibo-environment-ipc');
   await page.evaluate(() => showToast('这条较长的学习记录提示用于检查小屏幕换行。请核对本次保存的实践分钟数、步骤和任务状态，然后决定是否完成打卡。'.repeat(2),
     { label: '撤销', run: () => {} }));
   const lines = await page.locator('#taskDialog .toast > span').evaluate(span => {
@@ -1193,7 +1219,7 @@ test('a long mobile toast wraps without hiding task controls or leaving an empty
 
 test('an older progress Undo cannot erase a newer record for the same task received from sync', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
-  const id = 'av59-sat5-v1-w01-practice';
+  const id = 'edoyun-module-v1-yibo-environment-ipc';
   await page.evaluate(taskId => openTaskDetails(taskId), id);
   await page.locator('#practiceSessionMinutes').fill('40');
   await page.locator('[data-progress-step="0"]').check();
@@ -1217,7 +1243,7 @@ test('an older progress Undo cannot erase a newer record for the same task recei
 
 test('undoing completion during an unsaved edit updates the footer without discarding the draft', { timeout: 30_000 }, async t => {
   const page = await pageAt(t, 390);
-  const id = 'av59-sat5-v1-w01-practice';
+  const id = 'edoyun-module-v1-yibo-environment-ipc';
   await page.evaluate(taskId => openTaskDetails(taskId), id);
   assert.match(await page.locator('label[for="taskProgressNote"]').textContent(), /学习记录/);
   await page.locator('#practiceSessionMinutes').fill('40');
@@ -1249,8 +1275,8 @@ test('undoing completion during an unsaved edit updates the footer without disca
 
 test('an ordinary Undo still restores its task when another task receives a newer record', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
-  const first = 'av59-sat5-v1-w01-practice';
-  const second = 'av59-sat5-v1-w02-practice';
+  const first = 'edoyun-module-v1-yibo-environment-ipc';
+  const second = 'edoyun-module-v1-yibo-socket-thread';
   await seedEntries(page, { [first]: { done: false,
     progress: { kind: 'practice', workedMinutes: 15, completedSteps: [0] } } });
   await page.evaluate(id => changeTask(id, true), first);
@@ -1296,7 +1322,7 @@ test('Undo checks a newer localStorage record even before a storage event, but k
 });
 
 test('partial-import and reset Undo reject an entire batch if one affected task changes afterward', { timeout: 60_000 }, async t => {
-  const [first, second] = ['av59-sat5-v1-w01-practice', 'av59-sat5-v1-w02-practice'];
+  const [first, second] = ['edoyun-module-v1-yibo-environment-ipc', 'edoyun-module-v1-yibo-socket-thread'];
   const imported = await pageAt(t);
   await imported.locator('#openSyncBtn').click();
   const backup = { version: 3, entries: Object.fromEntries([first, second].map(id =>
@@ -1330,16 +1356,18 @@ test('partial-import and reset Undo reject an entire batch if one affected task 
 
 test('transition-week preview keeps distinct visible day types and full accessible labels at every width', { timeout: 60_000 }, async t => {
   const categories = [
-    { short: /零声/, full: /零声课程/ }, { short: /面试/, full: /面试准备/ },
-    { short: /项目/, full: /易道云.*项目|项目练习/ }, { short: /项目/, full: /易道云.*项目|项目练习/ },
-    { short: /项目/, full: /易道云.*项目|项目练习/ }, { short: /易道云|项目/, full: /易道云.*项目/ },
+    { short: /零声/, full: /零声课程/ }, { short: /零声/, full: /零声课程/ },
+    { short: /空闲|无固定任务/, full: /无固定任务/ }, { short: /空闲|无固定任务/, full: /无固定任务/ },
+    { short: /空闲|无固定任务/, full: /无固定任务/ }, { short: /项目/, full: /易道云.*项目/ },
     { short: /周日|机动/, full: /周日机动/ }
   ];
   for (const width of [320, 390, 1280]) {
     const page = await pageAt(t, width);
-    await page.clock.setFixedTime(new Date('2027-05-12T04:00:00Z'));
+    const lastZeroVoiceDate = await page.evaluate(() => allTasks.filter(task => task.track === 'ls').at(-1).date);
+    await page.clock.setFixedTime(new Date(`${lastZeroVoiceDate}T12:00:00+08:00`));
     await page.evaluate(() => render());
-    assert.equal(await page.locator('#previewWeekLabel').textContent().then(text => /第\s*32\s*周/.test(text)), true);
+    const weekLabel = await page.evaluate(() => phaseWeekLabel(currentWeek()));
+    assert.ok((await page.locator('#previewWeekLabel').textContent()).startsWith(weekLabel));
     const days = page.locator('#overviewWeekPreview .preview-day');
     assert.equal(await days.count(), 7);
     for (let index = 0; index < categories.length; index++) {
@@ -1447,7 +1475,7 @@ test('keyboard Undo restores a safe list focus without completing the next task'
 
 test('an expired Undo inside dirty confirmation leaves focus in the modal and returns safely to its task', { timeout: 30_000 }, async t => {
   const page = await pageAt(t, 390, { clockInstall: true });
-  const id = 'av59-sat5-v1-w01-practice';
+  const id = 'edoyun-module-v1-yibo-environment-ipc';
   await page.evaluate(taskId => openTaskDetails(taskId), id);
   await page.locator('#practiceSessionMinutes').fill('40');
   await page.locator('[data-progress-action="save-practice"]').click();

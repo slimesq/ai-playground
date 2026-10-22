@@ -253,22 +253,9 @@ function readLegacyJsonState() {
 }
 
 function writeEntries(entries) {
-  const upsert = db.prepare(`
-    INSERT INTO task_entries (task_id, done, updated_at, evidence, progress)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(task_id) DO UPDATE SET
-      done = excluded.done,
-      updated_at = excluded.updated_at,
-      evidence = excluded.evidence,
-      progress = excluded.progress
-    WHERE excluded.updated_at >= task_entries.updated_at
-  `);
-
   db.exec('BEGIN');
   try {
-    for (const [taskId, record] of Object.entries(entries)) {
-      upsert.run(taskId, record.done ? 1 : 0, record.updatedAt, record.evidence || '', record.progress ? JSON.stringify(record.progress) : '');
-    }
+    writeEntriesWithinTransaction(entries);
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');

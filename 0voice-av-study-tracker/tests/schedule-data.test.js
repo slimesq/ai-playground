@@ -1,11 +1,12 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
 
-// Independent snapshots of the existing 156 sessions and the three public catalogs.
+// Independent snapshots of the original 156 Zero Voice sessions and three public catalogs.
 // These expected values are deliberately stored here so checks need no live API or temporary export files.
 const ORIGINAL_SESSIONS = [
   ["ls40-00000-00039","2026-10-05",39,[{"lessonId":"w01-周一-ls-lesson-1","startMinute":0,"endMinute":39}]],
@@ -167,7 +168,7 @@ const ORIGINAL_SESSIONS = [
 ];
 const EXPECTED_COURSES = [
   {
-    title: "易播加密播放器Linux服务端", firstWeek: 1, lastWeek: 10,
+    title: "易播加密播放器Linux服务端", firstWeek: 1, lastWeek: 6,
     sections: [
       [2741, 609],
       [2744, 491],
@@ -227,7 +228,7 @@ const EXPECTED_COURSES = [
     ]
   },
   {
-    title: "云助教", firstWeek: 11, lastWeek: 24,
+    title: "云助教", firstWeek: 9, lastWeek: 17,
     sections: [
       [3762, 928],
       [3768, 690],
@@ -294,7 +295,7 @@ const EXPECTED_COURSES = [
     ]
   },
   {
-    title: "Course Studio", firstWeek: 25, lastWeek: 33,
+    title: "Course Studio", firstWeek: 20, lastWeek: 31,
     sections: [
       [4516, 455],
       [4517, 1576],
@@ -348,243 +349,1326 @@ const EXPECTED_COURSES = [
   },
 ];
 
+const EXPECTED_ZERO_VOICE = [
+  [
+    57,
+    "55-FLV解复用实战",
+    4710
+  ],
+  [
+    58,
+    "56-音频解码实战",
+    2240
+  ],
+  [
+    59,
+    "57-视频解码实战",
+    968
+  ],
+  [
+    60,
+    "58_1-MP4封装格式剖析",
+    4103
+  ],
+  [
+    61,
+    "59-2-MP4解封装",
+    4164
+  ],
+  [
+    62,
+    "60-AVIO内存输入模式",
+    4347
+  ],
+  [
+    63,
+    "61-音频处理基本概念及音频重采样",
+    4612
+  ],
+  [
+    64,
+    "62-音频处理基本概念及音频重采样",
+    4366
+  ],
+  [
+    65,
+    "63-音频编码实战",
+    2776
+  ],
+  [
+    66,
+    "64-H264编码原理详解",
+    4336
+  ],
+  [
+    67,
+    "65-视频编码实战",
+    2482
+  ],
+  [
+    69,
+    "66-音视频H264和AAC合成FLV实战(ffmpeg6.0版本)",
+    6977
+  ],
+  [
+    70,
+    "67_MP4合成实战1-框架分析",
+    749
+  ],
+  [
+    71,
+    "68_MP4合成实战2-muxer实现",
+    2582
+  ],
+  [
+    72,
+    "69_MP4合成实战3-音视频编码实现",
+    2651
+  ],
+  [
+    73,
+    "70_MP4合成实战4-合成mp4",
+    5758
+  ],
+  [
+    74,
+    "71_MP4合成实战5-优化",
+    3092
+  ],
+  [
+    75,
+    "01-H265-NALU分析和解码",
+    904
+  ],
+  [
+    76,
+    "02-H265编码实践",
+    1610
+  ],
+  [
+    77,
+    "03-nvdia硬件编码H264",
+    1375
+  ],
+  [
+    78,
+    "04-ffmpeg硬件解码",
+    2541
+  ],
+  [
+    79,
+    "05-FFmpeg两路音视频混流实现-音频混流",
+    3596
+  ],
+  [
+    80,
+    "73-FFmpeg过滤器框架分析",
+    705
+  ],
+  [
+    81,
+    "74-视频过滤器实战",
+    1250
+  ],
+  [
+    82,
+    "75-音频过滤器实战",
+    2320
+  ],
+  [
+    83,
+    "76-FFmpeg filter补充讲解",
+    2716
+  ],
+  [
+    133,
+    "122-RTMP流媒体服务器搭建",
+    1698
+  ],
+  [
+    134,
+    "123-RTMP协议剖析",
+    7877
+  ],
+  [
+    135,
+    "124-RTMP推流实战",
+    8167
+  ],
+  [
+    136,
+    "125-RTMP拉流实战",
+    9136
+  ],
+  [
+    137,
+    "屏幕录制+推流项目框架讲解",
+    1049
+  ],
+  [
+    138,
+    "126- HLS流媒体服务器配置",
+    1723
+  ],
+  [
+    139,
+    "127 HLS框架分析",
+    1587
+  ],
+  [
+    140,
+    "128- m3u8协议详解",
+    523
+  ],
+  [
+    141,
+    "129-TS协议解析",
+    2115
+  ],
+  [
+    142,
+    "130-HLS抓包分析5",
+    1356
+  ],
+  [
+    143,
+    "131-HTTP协议分析",
+    1383
+  ],
+  [
+    146,
+    "133（补充） nginx-hls-多码率测试环境搭建",
+    3449
+  ],
+  [
+    147,
+    "133（补充） TS协议补充",
+    1478
+  ],
+  [
+    150,
+    "158-RTSP基本原理",
+    1982
+  ],
+  [
+    151,
+    "159-RTP协议讲解",
+    1419
+  ],
+  [
+    152,
+    "160-RTP之H264封包和解包1-封包原理",
+    2153
+  ],
+  [
+    153,
+    "161-RTP之H264封包和解包2-编码实现",
+    5408
+  ],
+  [
+    154,
+    "162-RTP之AAC封包和解包1-软件框架分析",
+    3928
+  ],
+  [
+    155,
+    "163-RTP之AAC封包和解包2-原理和源码解析",
+    3023
+  ],
+  [
+    156,
+    "164-RTSP协议交互流程",
+    2280
+  ],
+  [
+    157,
+    "165-SDP协议分析",
+    1574
+  ],
+  [
+    158,
+    "166-rtcp详解",
+    5258
+  ],
+  [
+    171,
+    "什么是WebRTC",
+    160
+  ],
+  [
+    172,
+    "WebRTC框架",
+    299
+  ],
+  [
+    174,
+    " WebRTC通话原理1-STUN",
+    1239
+  ],
+  [
+    175,
+    "WebRTC通话原理2-TURN",
+    425
+  ],
+  [
+    176,
+    "WebRTC通话原理3-信令服务器",
+    559
+  ],
+  [
+    177,
+    "WebRTC通话原理4-一对一通话-补充",
+    1034
+  ],
+  [
+    180,
+    "coturn安装",
+    189
+  ],
+  [
+    181,
+    "coturn服务器测试",
+    386
+  ],
+  [
+    194,
+    "信令服务器map实战",
+    703
+  ],
+  [
+    195,
+    "一对一通话原理",
+    1445
+  ],
+  [
+    196,
+    "信令协议设计",
+    2262
+  ],
+  [
+    197,
+    "RTCPeerConnection补充",
+    415
+  ],
+  [
+    202,
+    "WebRTC API讲解",
+    667
+  ],
+  [
+    203,
+    "offer_answer",
+    3679
+  ],
+  [
+    253,
+    "136-SRS流媒体服务器开发概述",
+    2772
+  ],
+  [
+    254,
+    "137-SRS流媒体框架入门",
+    3939
+  ],
+  [
+    255,
+    "138-SRS流媒体服务器-推流框架分析",
+    3725
+  ],
+  [
+    256,
+    "139-SRS流媒体服务器-RTMP拉流框架分析",
+    1874
+  ],
+  [
+    257,
+    "140-SRS流媒体服务器-RTMP协议",
+    4041
+  ],
+  [
+    258,
+    "141-SRS流媒体服务器-RTMP协议2",
+    1377
+  ],
+  [
+    259,
+    "142-SRS流媒体服务器-RTMP推流消息处理",
+    3505
+  ],
+  [
+    260,
+    "143-SRS流媒体服务器-HTTP-FLV框架分析",
+    2837
+  ],
+  [
+    261,
+    "144-1SRS服务器-HTTP-FLV-配置文件",
+    1449
+  ],
+  [
+    262,
+    "145-2SRS服务器-HTTP-FLV-推拉",
+    1522
+  ],
+  [
+    263,
+    "146-3SRS服务器-HTTP-FLV-拉流1",
+    2999
+  ],
+  [
+    264,
+    "147-4SRS服务器-HTTP-FLV-拉流2",
+    3121
+  ],
+  [
+    265,
+    "148-SRS服务器-Forward集群",
+    1521
+  ],
+  [
+    266,
+    "149-SRS服务器-Forward源码分析2",
+    1853
+  ],
+  [
+    267,
+    "150-SRS流媒体服务器-edge集群-1",
+    2491
+  ],
+  [
+    268,
+    "151-SRS流媒体服务器-edge集群-2",
+    2956
+  ],
+  [
+    269,
+    "152-SRS流媒体服务器-edge集群-3",
+    1073
+  ],
+  [
+    270,
+    "153-SRS流媒体服务器-HLS文件配置",
+    1067
+  ],
+  [
+    271,
+    "154-SRS流媒体服务器-HLS拉流分析1",
+    3545
+  ],
+  [
+    272,
+    "156-SRS流媒体服务器-HLS拉流分析3",
+    3809
+  ],
+  [
+    273,
+    "155-SRS流媒体服务器-HLS拉流分析2",
+    1848
+  ],
+  [
+    274,
+    "1-ZLMediaKit环境搭建-RTSP",
+    1642
+  ],
+  [
+    275,
+    "2-ZLMediaKit网络模型框架分析",
+    1841
+  ],
+  [
+    276,
+    "3-1-RTSP推拉流框架分析-TCP模型",
+    1777
+  ],
+  [
+    277,
+    "3-2-RTSP推拉流框架分析-TCP模型",
+    2658
+  ],
+  [
+    278,
+    "3-3-RTSP推拉流框架分析-TCP模型",
+    659
+  ],
+  [
+    279,
+    "4-ZLMediaKit推流详解-TCP模式",
+    3120
+  ],
+  [
+    280,
+    "5-ZLM-RTSP拉流详解-TCP模式-bk",
+    653
+  ],
+  [
+    281,
+    "6-RTSP推拉流框架分析-UDP模型",
+    1011
+  ],
+  [
+    285,
+    "261-SRS配置支持WebRTC推拉流1",
+    1368
+  ],
+  [
+    286,
+    "262-SRS配置支持WebRTC推拉流2",
+    463
+  ],
+  [
+    287,
+    "263-SRS RTMP端口监听逻辑",
+    1865
+  ],
+  [
+    288,
+    "264-SRS  RTMP推流拉流怎么创建连接",
+    1665
+  ],
+  [
+    289,
+    "265-SRS RTMP推流读取数据,拉流转发数据",
+    1047
+  ],
+  [
+    290,
+    "266-SRS 哪些配置文件会影响RTMP的延迟",
+    2355
+  ],
+  [
+    291,
+    "267-SRS配置支持WebRTC直播",
+    615
+  ],
+  [
+    292,
+    "268- WebRTC 1v1通话1-配置和测试",
+    1631
+  ],
+  [
+    293,
+    "269-WebRTC 1v1通话2-逻辑分析",
+    2467
+  ],
+  [
+    294,
+    "270-rtmp2webrtc测试环境-",
+    379
+  ],
+  [
+    295,
+    "271-rtmp2webrtc提出问题-灵魂拷问-",
+    1551
+  ],
+  [
+    296,
+    "272-rtmp2webrtc协议转换",
+    1628
+  ],
+  [
+    297,
+    "273-RTMP2WebRTC逻辑",
+    3355
+  ],
+  [
+    298,
+    "274-WebRTC2Rtmp测试环境",
+    350
+  ],
+  [
+    299,
+    "275-WebRTC2Rtmp协议转换",
+    236
+  ],
+  [
+    300,
+    "276-WebRTC2Rtmp逻辑分析",
+    1204
+  ],
+  [
+    301,
+    "277-SRS-ICE交互分析",
+    2900
+  ],
+  [
+    302,
+    "278-SRS-DTLS握手",
+    1723
+  ],
+  [
+    303,
+    "279-SRS-SRTP加密传输",
+    937
+  ],
+  [
+    304,
+    "280-SRS-SDP详解1",
+    2831
+  ],
+  [
+    305,
+    "281-SRS-SDP详解2",
+    1383
+  ],
+  [
+    307,
+    "283参考资料-WebRTC的拥塞控制",
+    4602
+  ],
+  [
+    355,
+    "1-WHIP-WHEP协议介绍",
+    7439
+  ],
+  [
+    356,
+    "2-WebRTC基础与SDP处理",
+    7508
+  ],
+  [
+    357,
+    "3-WHIP推流服务实现",
+    6964
+  ],
+  [
+    358,
+    "4-WHEP拉流服务实现",
+    7424
+  ]
+];
+
 const html = fs.readFileSync(path.resolve(__dirname, '..', 'study-tracker.html'), 'utf8');
 const embedded = html.match(/\bconst DATA\s*=\s*(\{[\s\S]*?\})\s*;\s*<\/script>/);
-assert.ok(embedded, 'The delivered HTML must contain the complete schedule data');
+assert.ok(embedded, 'The delivered HTML contains the complete schedule');
 const data = JSON.parse(embedded[1]);
 const tasks = data.weeks.flatMap(week => week.tasks);
+const byId = new Map(tasks.map(task => [task.id, task]));
+const videos = tasks.filter(task => task.track === 'ydy' && task.learningSegments?.length);
+const practice = tasks.filter(task => task.id.startsWith('edoyun-module-v1-') && task.optional !== true);
+const reviews = tasks.filter(task => task.track === 'review');
+const workflow = data.careerWorkflow;
+const preparation = workflow.preparationTaskIds.map(id => byId.get(id));
+const teacher = byId.get(workflow.teacherTaskId);
+const interviews = workflow.interviewTaskIds.map(id => byId.get(id));
+const required = tasks.filter(task => task.optional !== true);
+const learning = required.filter(task => task.track === 'ls' || task.track === 'ydy');
+const zeroVoice = tasks.filter(task => task.track === 'ls' && task.activity === 'video');
+const curriculumContent = task => Object.fromEntries(Object.entries(task).filter(([key]) => !new Set(
+  ['date', 'day', 'week', 'startDate', 'endDate', 'workSessions', 'prerequisiteTaskIds', 'summary', 'duration']).has(key)));
 const sum = values => values.reduce((total, value) => total + value, 0);
-const almostEqual = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-7, `${message}: ${actual} != ${expected}`);
+const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const RETIRED_FLV_IDS = new Set(['ls40-00649-00688', 'ls40-00688-00726']);
+const RETIRED_FLV_LESSON_IDS = ['w03-周三-ls-lesson-1', 'w03-周四-ls-lesson-1'];
 const isoDate = instant => new Date(instant).toISOString().slice(0, 10);
 const weekday = date => new Date(`${date}T12:00:00Z`).getUTCDay();
+const almostEqual = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-7, `${message}: ${actual} != ${expected}`);
+const endDate = task => task.endDate || task.date;
+const sessions = task => task.onDemand === true || ['external', 'after-event'].includes(task.scheduleKind) ? [] : task.workSessions?.length ? task.workSessions
+  : [{ date: task.date, minutes: task.durationMinutes }];
+const allSessions = tasks.flatMap(task => sessions(task).map(session => ({ ...session, task })));
+const expectedSections = new Map(EXPECTED_COURSES.flatMap(course => course.sections.map(([id, seconds]) =>
+  [String(id), { course, seconds }])));
+const ancestorCache = new Map();
+function ancestors(task, visiting = new Set()) {
+  assert.ok(!visiting.has(task.id), `${task.id}: no prerequisite cycle`);
+  if (ancestorCache.has(task.id)) return ancestorCache.get(task.id);
+  const next = new Set(visiting).add(task.id), result = new Set();
+  for (const id of task.prerequisiteTaskIds || []) {
+    const parent = byId.get(id);
+    assert.ok(parent, `${task.id}: prerequisite ${id} exists`);
+    result.add(id);
+    for (const ancestor of ancestors(parent, next)) result.add(ancestor);
+  }
+  ancestorCache.set(task.id, result);
+  return result;
+}
 
-test('the complete calendar switches from lessons to interviews and projects while preserving daily limits', () => {
-  assert.equal(data.weeks.length, 52);
+test('the calendar stores each learning module once and charges sessions to their actual dates and weeks', () => {
+  assert.equal(byId.size, tasks.length);
   assert.equal(data.weeks[0].start, '2026-10-05');
-  assert.equal(data.weeks.at(-1).end, '2027-10-03');
-  assert.equal(data.planRhythm.weekdayVideoMinutes, 40);
-  assert.equal(data.planRhythm.weekdayPracticeMinutes, 0);
-  assert.equal(data.planRhythm.saturdayMinutes, 300);
-  assert.equal(data.planRhythm.sundayOptional, true);
-  assert.equal(tasks.length, 364);
-  assert.equal(new Set(tasks.map(task => task.id)).size, tasks.length, 'Task IDs cannot collide');
-  const topics = data.weeks.map(week => week.topic?.trim());
-  assert.ok(topics.every(Boolean));
-  assert.equal(new Set(topics).size, data.weeks.length, 'Every week needs a distinct, useful topic');
-  data.weeks.forEach((week, index) => {
+  assert.ok(data.weeks.length < 59, 'Retired template weeks are not retained as artificial required work');
+  assert.equal(new Set(data.weeks.map(week => week.topic)).size, data.weeks.length);
+  for (const [index, week] of data.weeks.entries()) {
     assert.equal(week.week, index + 1);
     assert.equal(week.start, isoDate(Date.parse('2026-10-05T00:00:00Z') + index * 7 * 86400000));
     assert.equal(week.end, isoDate(Date.parse(`${week.start}T00:00:00Z`) + 6 * 86400000));
-    const dayTotals = new Map();
+    assert.ok(week.topic?.trim());
     for (const task of week.tasks) {
       assert.equal(task.week, week.week);
-      assert.ok(task.date >= week.start && task.date <= week.end, `${task.id}: date belongs to its week`);
-      assert.ok(Number.isFinite(task.durationMinutes) && task.durationMinutes > 0);
-      dayTotals.set(task.date, (dayTotals.get(task.date) || 0) + task.durationMinutes);
-      assert.notEqual(weekday(task.date), 0, `${task.id}: Sundays have no fixed assignments`);
-      if (weekday(task.date) === 6) assert.equal(task.track, 'ydy', 'Saturday is reserved for Edoyun and projects');
-      if (task.track === 'ls') assert.ok(weekday(task.date) >= 1 && weekday(task.date) <= 5);
-    }
-    for (let offset = 0; offset < 5; offset++) {
-      const date = isoDate(Date.parse(`${week.start}T00:00:00Z`) + offset * 86400000);
-      const dayTasks = week.tasks.filter(task => task.date === date);
-      assert.equal(dayTasks.length, 1, `${date}: one weekday assignment, without extra practice`);
-      const task = dayTasks[0];
-      assert.ok(task.durationMinutes >= 35 && task.durationMinutes <= 45, `${date}: the only task remains about 40 minutes`);
-      assert.equal(task.learningSegments?.length || 0, 0, `${date}: no Edoyun videos on weekdays`);
-      if (date <= '2027-05-10') {
-        assert.equal(task.track, 'ls', `${date}: the first pass keeps its original weekdays`);
-        assert.ok(task.id.startsWith('ls40-'));
-      } else {
-        assert.equal(task.durationMinutes, 40);
-        assert.equal(task.segments?.length || 0, 0, 'After May 10 no fixed Zero Voice viewing is assigned');
-        if (offset <= 1) {
-          assert.equal(task.track, 'review', `${date}: Monday and Tuesday prepare for interviews`);
-          assert.equal(task.goalId, 'career');
-        } else {
-          assert.equal(task.track, 'ydy', `${date}: Wednesday through Friday advance the project`);
-          assert.ok(data.milestones.some(goal => goal.kind === 'project' && goal.id === task.goalId));
-        }
+      if (['external', 'after-event'].includes(task.scheduleKind)) {
+        assert.equal(task.date, undefined, 'An event or relative outline entry has no invented calendar date');
+        assert.deepEqual(task.workSessions, []);
+      } else assert.ok(week.start <= task.date && task.date <= week.end);
+      assert.ok(task.title?.trim() && Number.isFinite(task.durationMinutes));
+      assert.ok(task.scheduleKind === 'external' ? task.durationMinutes === 0 : task.durationMinutes > 0);
+      if (task.workSessions?.length) {
+        assert.equal(task.date, task.workSessions[0].date);
+        assert.equal(endDate(task), task.workSessions.at(-1).date);
+        assert.deepEqual(task.workSessions.map(item => item.date), task.workSessions.map(item => item.date).sort());
+        assert.equal(new Set(task.workSessions.map(item => item.date)).size, task.workSessions.length,
+          'One module has at most one planned session on a given day');
+        almostEqual(sum(task.workSessions.map(item => item.minutes)), task.durationMinutes, `${task.id}: module estimate equals planned sessions`);
       }
     }
-    const saturday = isoDate(Date.parse(`${week.start}T00:00:00Z`) + 5 * 86400000);
-    const saturdayTasks = week.tasks.filter(task => task.date === saturday);
-    assert.ok(saturdayTasks.length >= 2 && saturdayTasks.length <= 3, `${saturday}: split the five-hour session into actionable blocks`);
-    almostEqual(dayTotals.get(saturday) || 0, 300, `${saturday}: Saturday retains five project hours`);
-    const total = sum([...dayTotals.values()]);
-    assert.ok(total <= 525 + 1e-7, `Week ${week.week} exceeds five 45-minute weekdays plus five Saturday hours`);
-    almostEqual(week.scheduledMinutes, total, `Week ${week.week}: scheduled time equals all assigned work`);
-    almostEqual(week.totalMin, sum(week.tasks.filter(task => task.id.startsWith('ls40-')).map(task => task.durationMinutes)), `Week ${week.week}: legacy totalMin retains original video minutes`);
-  });
+    const planned = allSessions.filter(session => week.start <= session.date && session.date <= week.end);
+    almostEqual(week.scheduledMinutes, sum(planned.map(session => session.minutes)), `${week.week}: weekly load comes from sessions, not module start dates`);
+    assert.ok(week.scheduledMinutes <= 12 * 60 + 1e-7, `${week.week}: fixed sessions remain within the accepted weekly maximum`);
+    almostEqual(week.totalMin, sum(planned.filter(session => session.task.track === 'ls').map(session => session.minutes)), 'Zero Voice subtotal remains genuine video time');
+  }
+  for (const task of tasks.filter(item => item.workSessions?.length > 1))
+    assert.equal(tasks.filter(item => item.id === task.id).length, 1, 'Cross-week continuation cannot create new duplicate check-ins');
 });
 
-test('34 course weeks and 18 project weeks have separate numbering and topics for their actual assignments', () => {
-  assert.deepEqual(data.planPhases.map(phase => [phase.id, phase.startWeek, phase.endWeek, phase.start, phase.end]), [
-    ['courses', 1, 34, '2026-10-05', '2027-05-30'],
-    ['projects', 35, 52, '2027-05-31', '2027-10-03'],
-  ]);
-  assert.equal(data.planPhases[0].deadline, '2027-05-31');
-  const assignedWeeks = [];
+test('daily scheduling respects Zero Voice weekdays, course-specific video limits and project practice capacity', () => {
+  assert.deepEqual(data.planRhythm.afterCourseWeekdays.interviewDays, []);
+  assert.deepEqual(data.planRhythm.afterCourseWeekdays.projectDays, [1, 2, 3, 4, 5]);
+  assert.equal(data.planRhythm.afterCourseWeekdays.minutes, 40);
+  assert.deepEqual(data.planRhythm.careerWeekdays.days, [1, 2, 3, 4, 5]);
+  const dates = [...new Set(allSessions.map(session => session.date))].sort();
+  for (const date of dates) {
+    const assigned = allSessions.filter(session => session.date === date);
+    assert.notEqual(weekday(date), 0, 'Sunday has no fixed sessions');
+    assert.ok(assigned.every(session => Number.isFinite(session.minutes) && session.minutes > 0));
+    if (weekday(date) !== 6) {
+      if (date <= '2027-03-23') {
+        assert.equal(assigned.length, 1);
+        assert.equal(assigned[0].task.track, 'ls');
+        almostEqual(assigned[0].minutes, date === '2027-03-23' ? 2133 / 60 : 40, 'Every daily course slot is exactly forty minutes except the final remainder');
+      } else assert.ok(sum(assigned.map(session => session.minutes)) <= 40,
+        `${date}: module totals cannot be mistaken for a weekday session`);
+      assert.ok(assigned.every(session => session.task.track !== 'ydy' || !session.task.learningSegments?.length), 'Edoyun video stays on Saturday');
+    } else if (date >= data.planPhases.find(phase => phase.id === 'career').start) {
+      assert.ok(assigned.every(session => workflow.skillPreparationTaskIds.includes(session.task.id)), 'Career Saturdays are reserved for skill modules');
+      assert.ok(sum(assigned.map(session => session.minutes)) <= 300);
+    } else {
+      assert.ok(assigned.every(session => session.task.track === 'ydy'));
+      const caps = { yibo: 300, yunzhujiao: 240, 'studio-course': 120 };
+      for (const [projectId, cap] of Object.entries(caps))
+        assert.ok(sum(assigned.filter(session => session.task.projectId === projectId && session.task.learningSegments?.length)
+          .map(session => session.minutes)) <= cap + 1e-7, `${projectId}: its actual video cap survives`);
+      const week = data.weeks.find(item => item.start <= date && date <= item.end);
+      assert.ok(sum(assigned.filter(session => !session.task.learningSegments?.length).map(session => session.minutes))
+        <= (week.week <= 17 ? 210 : 300), `${date}: practice has its own accepted Saturday capacity`);
+    }
+  }
+});
+
+test('after Zero Voice ends, available weekdays continue ready course modules without inventing work before their source videos', () => {
+  const first = data.planRhythm.weekdayTransitionDate;
+  const last = data.planRhythm.courseWrapUpDate;
+  assert.equal(first, '2027-03-24');
+  for (let instant = Date.parse(`${first}T00:00:00Z`); instant <= Date.parse(`${last}T00:00:00Z`); instant += 86400000) {
+    const date = isoDate(instant);
+    if (weekday(date) === 0 || weekday(date) === 6) continue;
+    const work = allSessions.filter(session => session.date === date);
+    const ready = practice.filter(task => endDate(task) >= date
+      && (task.prerequisiteTaskIds || []).every(id => endDate(byId.get(id)) <= date));
+    if (ready.length) assert.ok(work.length > 0, `${date}: a ready unfinished course module uses the available weekday slot`);
+    assert.ok(work.every(session => session.task.id.startsWith('edoyun-module-v1-') && session.task.optional !== true));
+    assert.ok(sum(work.map(session => session.minutes)) <= 40);
+  }
+  const weekdayPractice = allSessions.filter(session => session.task.track === 'ydy' && !session.task.learningSegments?.length
+    && weekday(session.date) >= 1 && weekday(session.date) <= 5);
+  assert.ok(weekdayPractice[0].date <= '2027-03-29', 'The first ready March module must use released weekdays rather than wait until May');
+  assert.ok(sum(weekdayPractice.map(session => session.minutes)) > 180, 'Newly available weekdays actually carry more practice than the former May-only transition');
+});
+
+test('phases and weekly labels follow session dates and interview preparation starts after required learning', () => {
+  assert.deepEqual(data.planPhases.map(phase => phase.id), ['courses', 'career']);
+  const covered = [];
   for (const phase of data.planPhases) {
-    const phaseWeeks = data.weeks.filter(week => week.phaseId === phase.id);
-    assert.equal(phaseWeeks.length, phase.endWeek - phase.startWeek + 1);
-    assert.equal(phaseWeeks[0].start, phase.start);
-    assert.equal(phaseWeeks.at(-1).end, phase.end);
-    phaseWeeks.forEach((week, index) => {
-      assert.equal(week.week, phase.startWeek + index);
+    const weeks = data.weeks.filter(week => week.phaseId === phase.id);
+    assert.equal(weeks.length, phase.endWeek - phase.startWeek + 1);
+    assert.equal(weeks[0].start, phase.start);
+    assert.equal(weeks.at(-1).end, phase.end, 'Phase boundaries delimit calendar reference weeks');
+    if (phase.openEnded) assert.equal(phase.countLabel, '按进度推进', 'Reference weeks do not promise a workflow completion date');
+    for (const [index, week] of weeks.entries()) {
+      covered.push(week.week);
       assert.equal(week.phaseWeek, index + 1);
-      assignedWeeks.push(week.week);
-      const expectedTracks = [...new Set(week.tasks.map(task => task.track))].sort();
-      assert.deepEqual(week.topics.map(topic => topic.track).sort(), expectedTracks, `Week ${week.week}: every assigned source needs its own topic`);
-      for (const topic of week.topics) {
-        assert.ok(typeof topic.title === 'string' && topic.title.trim());
-        assert.equal(topic.label, topic.track === 'ls' ? '零声' : topic.track === 'review' ? '面试' : phase.id === 'courses' ? '易道云' : '项目');
-        if (topic.track === 'ls') {
-          const lessonIds = [...new Set(week.tasks.filter(task => task.track === 'ls').flatMap(task => task.segments.map(segment => segment.lessonId)))];
-          assert.deepEqual(topic.sourceLessonIds, lessonIds, `Week ${week.week}: the Zero Voice topic references exactly this week's original lessons`);
-          assert.equal(phase.id, 'courses');
-        }
-      }
-      if (phase.id === 'projects') {
-        assert.ok(week.tasks.every(task => !task.segments?.length && !task.learningSegments?.length), 'The separate project phase cannot contain course viewing');
-      }
-    });
-  }
-  assert.deepEqual(assignedWeeks, data.weeks.map(week => week.week), 'Phases cover the schedule without gaps or overlap');
-  const lessonTopics = data.weeks.flatMap(week => week.topics.filter(topic => topic.track === 'ls'));
-  assert.equal(lessonTopics.length, 32);
-  assert.equal(new Set(lessonTopics.map(topic => topic.title)).size, 32, 'The Zero Voice weeks have distinct lesson themes');
-});
-
-test('all original zero-voice IDs, dates, segments and 6271 minutes remain unchanged', () => {
-  const original = tasks.filter(task => task.id.startsWith('ls40-'));
-  assert.ok(original.every(task => task.track === 'ls' && task.activity === 'video'));
-  assert.equal(original.length, 156);
-  assert.deepEqual(original.map(task => [task.id, task.date, task.durationMinutes, task.segments]), ORIGINAL_SESSIONS);
-  assert.equal(sum(original.map(task => task.durationMinutes)), 6271);
-  assert.ok(original.every(task => task.week <= 32));
-  assert.equal(original.at(-1).date, '2027-05-10');
-  assert.deepEqual(tasks.filter(task => task.track === 'ls').map(task => task.id), original.map(task => task.id), 'Only the preserved first pass uses the Zero Voice track');
-  assert.equal(data.courseCatalog.length, 207);
-  const lessons = new Map(data.courseCatalog.map(lesson => [lesson.id, lesson]));
-  assert.equal(lessons.size, 207);
-  const covered = new Map();
-  for (const task of original) {
-    almostEqual(sum(task.segments.map(segment => segment.endMinute - segment.startMinute)), task.durationMinutes, `${task.id}: original segment minutes`);
-    for (const segment of task.segments) {
-      assert.ok(lessons.has(segment.lessonId), 'Every original segment resolves to an original lesson');
-      const previousEnd = covered.get(segment.lessonId) || 0;
-      assert.equal(segment.startMinute, previousEnd, `${segment.lessonId}: no repeated or skipped original video minutes`);
-      assert.ok(segment.endMinute > segment.startMinute);
-      covered.set(segment.lessonId, segment.endMinute);
+      const inWeek = allSessions.filter(session => week.start <= session.date && session.date <= week.end);
+      assert.deepEqual(week.topics.map(topic => topic.track).sort(), [...new Set(inWeek.map(session => session.task.track))].sort());
+      for (const topic of week.topics) assert.ok(topic.title?.trim());
+      assert.ok(inWeek.every(session => phase.id === 'career' ? session.task.track === 'review' : session.task.track !== 'review'));
     }
   }
-  assert.equal(covered.size, 207);
-  for (const lesson of lessons.values()) assert.equal(covered.get(lesson.id), lesson.minutes, `${lesson.id}: original lesson is complete`);
+  assert.deepEqual(covered, data.weeks.map(week => week.week));
+  const coursePhase = data.planPhases.find(phase => phase.id === 'courses');
+  assert.equal(coursePhase.end, '2027-05-23');
+  const lastLearning = learning.map(endDate).sort().at(-1);
+  assert.ok(preparation.every(task => task.date > lastLearning));
+  assert.equal(data.planRhythm.learningCompletionDate, lastLearning);
+  const careerPhase = data.planPhases.find(phase => phase.id === 'career');
+  assert.equal(careerPhase.startWeek, 34);
+  assert.equal(careerPhase.endWeek, 36);
+  assert.equal(careerPhase.start, '2027-05-24');
+  assert.equal(careerPhase.openEnded, true);
+  assert.equal(careerPhase.countLabel, '按进度推进');
+  assert.equal(careerPhase.end, '2027-06-13');
+  assert.equal(data.weeks.length, 36);
+  assert.equal(tasks.length, 208);
+  assert.equal(required.length, 207);
+  assert.equal(learning.length, 184);
+  assert.equal(workflow.preparationStartDate, '2027-05-24');
+  assert.equal(workflow.preparationCompletionDate, preparation.map(endDate).sort().at(-1),
+    'Workflow metadata follows the actual final material session');
 });
 
-test('all 165 Edoyun videos are covered continuously exactly once before the May 22 target', () => {
-  const expected = new Map(EXPECTED_COURSES.flatMap(course => course.sections.map(([id, seconds]) => [String(id), { course, seconds }])));
-  assert.equal(expected.size, 165);
-  const progress = new Map();
-  const observedOrder = [];
-  const learningTasks = tasks.filter(task => task.learningSegments?.length);
-  assert.ok(learningTasks.length > 0);
-  assert.ok(learningTasks.every(task => task.date <= '2027-05-22'));
-  for (const task of learningTasks) {
-    assert.equal(task.track, 'ydy', 'Real Edoyun course segments belong to the project track');
+test('the server curriculum contains the approved sources and covers every original second in forty-minute weekdays', () => {
+  assert.equal(zeroVoice.length, 122);
+  assert.equal(data.courseCatalog.length, 117);
+  assert.deepEqual(data.courseCatalog.map(lesson => [lesson.sourceIndex, lesson.title, lesson.durationSeconds])
+    .sort((a, b) => a[0] - b[0]), EXPECTED_ZERO_VOICE);
+  assert.equal(sum(data.courseCatalog.map(lesson => lesson.durationSeconds)), 292533);
+  assert.equal(zeroVoice[0].date, '2026-10-05');
+  assert.equal(zeroVoice.at(-1).date, '2027-03-23');
+  assert.equal(data.planRhythm.zeroVoiceCompletionDate, zeroVoice.at(-1).date);
+  assert.deepEqual(zeroVoice.map(task => task.durationSeconds), [...Array(121).fill(2400), 2133]);
+  const covered = new Map(), order = [];
+  let previousDate = '';
+  for (const task of zeroVoice) {
+    assert.match(task.id, /^ls-module-v2-/);
+    assert.equal(task.optional, undefined);
+    assert.ok(weekday(task.date) >= 1 && weekday(task.date) <= 5);
+    assert.ok(task.date > previousDate);
+    previousDate = task.date;
+    assert.equal(sum(task.learningSegments.map(segment => segment.endSecond - segment.startSecond)), task.durationSeconds);
+    almostEqual(sum(task.segments.map(segment => segment.endMinute - segment.startMinute)), task.durationMinutes, 'Canonical minute ranges agree with exact-second footage');
     for (const segment of task.learningSegments) {
-      const reference = expected.get(String(segment.sectionId));
-      assert.ok(reference, `${segment.sectionId}: no unknown or substitute video`);
-      assert.equal(segment.courseTitle, reference.course.title);
-      assert.ok(task.week >= reference.course.firstWeek && task.week <= reference.course.lastWeek, `${segment.courseTitle}: correct stage window`);
-      assert.ok(typeof segment.chapterTitle === 'string' && segment.chapterTitle.trim());
-      assert.ok(typeof segment.title === 'string' && segment.title.trim());
-      assert.equal(segment.totalSeconds, reference.seconds);
-      assert.ok(Number.isInteger(segment.startSecond) && Number.isInteger(segment.endSecond), 'Real timestamps preserve second precision');
-      assert.equal(segment.startSecond, progress.get(String(segment.sectionId)) || 0, `${segment.sectionId}: no overlapping or missing seconds`);
+      const lesson = data.courseCatalog.find(item => item.id === segment.sectionId);
+      assert.ok(lesson);
+      assert.equal(segment.title, lesson.title);
+      assert.equal(segment.totalSeconds, lesson.durationSeconds);
+      assert.ok(Number.isInteger(segment.startSecond) && Number.isInteger(segment.endSecond));
+      assert.equal(segment.startSecond, covered.get(segment.sectionId) || 0, 'No required footage is skipped or repeated');
       assert.ok(segment.endSecond > segment.startSecond && segment.endSecond <= segment.totalSeconds);
-      if (!progress.has(String(segment.sectionId))) observedOrder.push(String(segment.sectionId));
-      progress.set(String(segment.sectionId), segment.endSecond);
+      if (!covered.has(segment.sectionId)) order.push(segment.sectionId);
+      covered.set(segment.sectionId, segment.endSecond);
     }
   }
-  assert.deepEqual(observedOrder, [...expected.keys()], 'Courses and their sections follow the complete source order');
-  for (const [id, reference] of expected) assert.equal(progress.get(id), reference.seconds, `${id}: full original video covered`);
-  assert.equal(sum([...progress.values()]), 303529);
-  assert.ok(data.weeks.filter(week => week.week >= 34).every(week => week.tasks.every(task => !task.learningSegments?.length)), 'No new course segments are assigned after the first pass');
-  const finalCatchUp = tasks.filter(task => task.date === '2027-05-29');
-  assert.equal(finalCatchUp.length, 2, 'May 29 retains the final Saturday catch-up blocks');
-  almostEqual(sum(finalCatchUp.map(task => task.durationMinutes)), 300, 'The final catch-up Saturday retains five hours');
-  assert.ok(finalCatchUp.some(task => /补漏|回看/.test(task.title + task.summary)), 'May 29 explicitly identifies the remaining course catch-up');
-  const afterDeadline = tasks.filter(task => task.date > '2027-05-31');
-  assert.ok(afterDeadline.every(task => !task.learningSegments?.length && !task.segments?.length && task.budget.videoMinutes === 0), 'No course viewing remains after the May 31 deadline');
-  const deepening = data.weeks.filter(week => week.week >= 35).flatMap(week => week.tasks.filter(task => task.track === 'ydy'));
-  assert.ok(deepening.every(task => weekday(task.date) >= 3 && weekday(task.date) <= 6));
-  const deepeningMinutes = sum(deepening.map(task => task.durationMinutes));
-  assert.equal(deepeningMinutes, 126 * 60, 'Weeks 35–52 reserve 126 hours for deeper project work');
-  const finalBuffer = data.weeks.filter(week => week.week >= 50).flatMap(week => week.tasks.filter(task => task.track === 'ydy'));
-  assert.equal(sum(finalBuffer.map(task => task.durationMinutes)), 21 * 60, 'The last three weeks retain 21 project hours');
+  assert.deepEqual(order, data.courseCatalog.map(lesson => lesson.id));
+  for (const lesson of data.courseCatalog) assert.equal(covered.get(lesson.id), lesson.durationSeconds);
+  assert.equal(sum([...covered.values()]), 292533);
+  const sourceOrder = data.courseCatalog.map(lesson => lesson.sourceIndex);
+  assert.ok(sourceOrder.indexOf(69) < sourceOrder.indexOf(135), 'Required encoding and newer FLV muxing precede the RTMP publisher implementation');
+  assert.ok(sourceOrder.indexOf(158) < sourceOrder.indexOf(274), 'RTP/RTSP/RTCP precedes ZLM server source');
+  assert.deepEqual(sourceOrder.filter(index => [271, 272, 273].includes(index)), [271, 273, 272], 'HLS lessons 154, 155, 156 follow their actual numbered order');
+  const firstSrs = zeroVoice.find(task => task.learningSegments.some(segment => segment.sectionId === 'ls-source-253'));
+  assert.equal(firstSrs.date, '2026-12-11');
+  assert.ok(firstSrs.date < data.projectLearningScope.find(scope => scope.projectId === 'yunzhujiao').practiceCompletionDate);
+  for (const task of tasks) assert.ok(!(task.prerequisiteTaskIds || []).some(id => id.startsWith('ls40-')));
+  assert.ok(!data.courseCatalog.some(lesson => /4[.]2版本|ffplay|Android|MESH|P2P框架|C\+\+Native|WebRTC-peerconnection客户端/.test(lesson.title)));
+  assert.ok(!tasks.some(task => task.optionalKind === 'version-reference'));
+  assert.equal(data.courseCatalog.filter(lesson => /6[.]0版本/.test(lesson.title)).length, 1);
+  assert.equal(data.courseCatalog.find(lesson => lesson.sourceIndex === 69).durationSeconds, 6977);
+  const expectedModules = [
+    ['media-api', [57, 58, 59, 60, 61, 62]],
+    ['codec-flv', [63, 64, 65, 66, 67, 69]],
+    ['studio-media', [70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83]],
+    ['rtmp', [133, 134, 135, 136, 137]],
+    ['hls-protocol', [138, 139, 140, 141, 142, 143, 146, 147]],
+    ['srs-core', [253, 254, 255, 256, 257, 258, 259, 260, 261, 262]],
+    ['srs-distribution', [263, 264, 265, 266, 267, 268, 269, 270, 271, 273, 272]],
+    ['rtsp-rtp', [150, 151, 152, 153, 154, 155, 156, 157, 158]],
+    ['zlm', [274, 275, 276, 277, 278, 279, 280, 281]],
+    ['rtc-primer', [171, 172, 174, 175, 176, 177, 180, 181, 194, 195, 196, 197, 202, 203]],
+    ['srs-rtc', [285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 307]],
+    ['whip-whep', [355, 356, 357, 358]]
+  ];
+  assert.deepEqual(sourceOrder, expectedModules.flatMap(([, indices]) => indices),
+    'Only whole modules move; retained lessons follow their original internal order except the corrected HLS numbering');
+  const configured = data.zeroVoiceCurriculum;
+  assert.deepEqual(configured.modules.map(module => [module.id, module.sourceIds]), expectedModules.map(([id, indices]) =>
+    [id, indices.map(index => `ls-source-${String(index).padStart(3, '0')}`)]));
+  assert.equal(configured.videoSeconds, 292533);
+  assert.deepEqual(configured.modules.flatMap(module => module.sourceIds), order);
+  for (const module of configured.modules) {
+    const viewed = zeroVoice.filter(task => task.learningSegments.some(segment => module.sourceIds.includes(segment.sectionId)));
+    assert.equal(module.startDate, viewed[0].date);
+    assert.equal(module.endDate, viewed.at(-1).date);
+    assert.equal(module.seconds, sum(data.courseCatalog.filter(lesson => module.sourceIds.includes(lesson.id)).map(lesson => lesson.durationSeconds)));
+  }
 });
 
-test('task details have actionable steps and honest video, practice and buffer budgets', () => {
+test('all 156 former daily sessions and 207 split lessons retain exact independent historical snapshots', () => {
+  const archived = new Map([...data.legacyVideoTasks, ...data.legacyReferenceTasks].map(task => [task.id, task]));
+  const snapshots = ORIGINAL_SESSIONS.map(([id]) => archived.get(id));
+  assert.ok(snapshots.every(Boolean));
+  assert.deepEqual(snapshots.map(task => [task.id, task.date, task.durationMinutes, task.segments]), ORIGINAL_SESSIONS);
+  assert.ok(snapshots.every(task => !byId.has(task.id)), 'Retired session records are never active assignments');
+  const lessonIds = [...new Set(ORIGINAL_SESSIONS.flatMap(([, , , segments]) => segments.map(segment => segment.lessonId)))];
+  const catalog = new Map(data.legacyCourseCatalog.map(lesson => [lesson.id, lesson]));
+  assert.equal(catalog.size, 207);
+  assert.equal(digest(lessonIds.map(id => catalog.get(id))), '82db5545c36de8ec53de28f2e24f24789282bc8477a95c3340c05c4448578b65',
+    'The original split catalog remains a truthful snapshot, including the two superseded 4.2 entries');
+  const retainedOriginal = ORIGINAL_SESSIONS.filter(([id]) => !RETIRED_FLV_IDS.has(id)).map(([id]) => archived.get(id));
+  assert.equal(retainedOriginal.length, 154);
+  for (const task of retainedOriginal) {
+    const ranges = data.legacyZeroVoiceVideoRanges[task.id];
+    assert.ok(ranges?.length, `${task.id}: retained source mapping supports exact progress migration`);
+    for (const range of ranges) assert.ok(range.startSecond < range.endSecond && range.sourceStartSecond <= range.sourceEndSecond);
+  }
+  for (const id of RETIRED_FLV_IDS) assert.equal((data.legacyZeroVoiceVideoRanges[id] || []).length, 0, 'The old version cannot credit the newer video');
+});
+
+test('the preceding 122 server sessions retain their exact native ranges and never rewrite the earlier migration sources', () => {
+  const preceding = data.legacyVideoTasks.filter(task => task.id.startsWith('ls-server-v1-'));
+  assert.equal(data.legacyVideoTasks.length, 322);
+  assert.equal(preceding.length, 122);
+  assert.equal(digest(preceding), 'd75f64558a172475ff05d7616688bffc3dd6651cee168d0115d2866ac8b6acd7',
+    'The complete prior task objects preserve their dates, titles, ranges, budgets and historical links');
+  assert.ok(preceding.every(task => !byId.has(task.id)), 'Earlier native tasks remain archive sources rather than active duplicates');
+  assert.deepEqual(Object.keys(data.legacyZeroVoiceVideoGenerations).sort(), preceding.map(task => task.id).sort());
+  assert.ok(Object.values(data.legacyZeroVoiceVideoGenerations).every(generation => generation === 2));
+  assert.equal(digest(data.legacyZeroVoiceVideoRanges), '7f7be3b8bbaa86c3092e0a95e47eb2c147b735ef09fa1db73ab9d1df68cd5f4d',
+    'Reordering modules leaves all 154 earliest raw-stop mappings unchanged');
+});
+
+test('module reordering preserves every non-Zero-Voice task, date, source scope and teacher workflow', () => {
+  const nonLs = tasks.filter(task => task.track !== 'ls').map(task => Object.fromEntries(Object.entries(task)
+    .filter(([key]) => key !== 'prerequisiteTaskIds')));
+  assert.equal(digest(nonLs), '824ef9fa6cc5b65122db426a73d5b0f89f8b525563705727179a4af59d6e2df4',
+    'Only current Zero Voice prerequisite IDs may change outside the reordered curriculum');
+  assert.equal(digest(data.projectLearningScope), 'df0454ce62eac36110408737f5ac41f0a64d3c6e1950c1cc9e0d1ce252f94e0b');
+  assert.equal(digest(data.careerWorkflow), 'dc8d6ad263a0f98ae0098392f6d199a0e31416aba85ec127c38495062f8dbd13');
+  for (const task of tasks) assert.ok(!(task.prerequisiteTaskIds || []).some(id => id.startsWith('ls-server-v1-')),
+    'Archived native session IDs cannot remain current learning prerequisites');
+});
+
+test('all 165 Edoyun videos retain their catalog order, exact seconds and original viewing dates', () => {
+  assert.equal(expectedSections.size, 165);
+  assert.equal(videos.length, 27);
+  assert.equal(digest(videos.map(task => [task.id, task.date, task.durationMinutes, task.learningSegments])),
+    'a2dda6b8a3983f81d8b518c73306482a1d495c8b8c110d48b9a057b180c06354',
+    'The genuine original video sessions keep every ID, date, duration and exact playback interval');
+  const covered = new Map(), order = [];
+  for (const task of videos) {
+    assert.equal(task.track, 'ydy');
+    assert.equal(task.activity, 'video');
+    assert.equal(weekday(task.date), 6);
+    for (const segment of task.learningSegments) {
+      const reference = expectedSections.get(String(segment.sectionId));
+      assert.ok(reference);
+      assert.equal(segment.courseTitle, reference.course.title);
+      assert.equal(segment.totalSeconds, reference.seconds);
+      assert.ok(task.week >= reference.course.firstWeek && task.week <= reference.course.lastWeek);
+      assert.ok(segment.title?.trim() && segment.chapterTitle?.trim());
+      assert.ok(Number.isInteger(segment.startSecond) && Number.isInteger(segment.endSecond));
+      assert.equal(segment.startSecond, covered.get(String(segment.sectionId)) || 0);
+      assert.ok(segment.endSecond > segment.startSecond && segment.endSecond <= reference.seconds);
+      if (!covered.has(String(segment.sectionId))) order.push(String(segment.sectionId));
+      covered.set(String(segment.sectionId), segment.endSecond);
+    }
+  }
+  assert.deepEqual(order, [...expectedSections.keys()]);
+  for (const [id, reference] of expectedSections) assert.equal(covered.get(id), reference.seconds);
+  assert.equal(sum([...covered.values()]), 303529);
+  assert.deepEqual(data.projectLearningScope.map(scope => [scope.projectId, scope.startWeek, scope.endWeek, scope.videoCompletionDate]), [
+    ['yibo', 1, 6, '2026-11-14'], ['yunzhujiao', 9, 17, '2027-01-30'], ['studio-course', 20, 31, '2027-05-08']
+  ]);
+  assert.equal(data.planRhythm.edoyunVideoCompletionDate, '2027-05-08');
+  assert.deepEqual(videos.filter(task => task.projectId === 'yibo').map(task => task.date),
+    ['2026-10-10', '2026-10-17', '2026-10-24', '2026-10-31', '2026-11-07', '2026-11-14']);
+});
+
+test('course practice covers every original section with complete modules and honest integer estimates', () => {
+  assert.equal(practice.length, 35);
+  assert.equal(digest(practice.map(curriculumContent)), '9e8089016022a53cf4d315b43c754dbf667eb062f2ed8b493e96366448dc9d69',
+    'All 35 practice modules retain their content, duration, source sections, estimates and outputs while their sessions move');
+  const covered = new Set();
+  const finalVideoBySection = new Map();
+  for (const task of videos) for (const section of task.learningSegments)
+    if (section.endSecond === section.totalSeconds) finalVideoBySection.set(String(section.sectionId), task);
+  for (const task of practice) {
+    assert.ok(Number.isInteger(task.durationMinutes) && task.durationMinutes % 30 === 0,
+      'Practice uses task-based half-hour estimates rather than second-precise residual video budgets');
+    assert.ok(task.estimateBasis?.trim() && /初估|estimate/.test(task.estimateKind || task.estimateBasis));
+    assert.ok(!task.practiceParts?.length, 'New modules do not inherit arbitrary equal thirds of retired practice');
+    assert.ok(task.sourceSectionIds.length && task.sourceSections.length);
+    assert.deepEqual(task.sourceSectionIds, task.sourceSections.map(section => section.sectionId));
+    for (const section of task.sourceSections) {
+      const id = String(section.sectionId), video = finalVideoBySection.get(id);
+      assert.ok(expectedSections.has(id));
+      covered.add(id);
+      assert.ok(video && task.date >= video.date, `${task.id}: practice cannot precede its fully viewed section`);
+      assert.equal(section.videoCompletionDate, video.date);
+      assert.equal(section.videoTaskId, video.id);
+      assert.ok(ancestors(task).has(video.id), `${task.id}: source viewing is a real prerequisite`);
+    }
+    assert.ok(task.steps.length >= 2 && task.deliverables.length);
+    assert.ok(task.workSessions.length);
+  }
+  assert.deepEqual([...covered].sort(), [...expectedSections.keys()].sort());
+  assert.ok(practice.some(task => task.workSessions.length > 1), 'A module can continue across sessions without duplicating its output requirement');
+});
+
+test('Yibo practice includes both database adapters, the actual business path and final project validation', () => {
+  const text = suffix => {
+    const task = byId.get(`edoyun-module-v1-yibo-${suffix}`);
+    assert.ok(task);
+    return [...task.steps, ...task.deliverables].join(' ');
+  };
+  assert.match(text('sqlite'), /SQLite.*持久化|持久化.*SQLite/);
+  assert.match(text('mysql'), /MySQL.*读写/);
+  assert.match(text('business'), /HTTP.*数据库.*加密/);
+  assert.match(text('business'), /同一次请求|属于同一次/);
+  assert.match(text('selftest'), /完整Linux服务|完整.*服务/);
+  assert.match(text('selftest'), /干净目录.*55节/);
+  assert.match(text('selftest'), /核心功能未通过.*阻塞/);
+});
+
+test('Cloud practice requires audio and video end to end, real load allocation and an executed remote command', () => {
+  const text = suffix => {
+    const task = byId.get(`edoyun-module-v1-yunzhujiao-${suffix}`);
+    assert.ok(task);
+    return [...task.steps, ...task.deliverables].join(' ');
+  };
+  assert.match(text('environment-codecs'), /视频编码\/解码.*音频编码\/解码/);
+  assert.match(text('load-balancer'), /两个节点.*不可用节点/);
+  assert.match(text('client-push-pull'), /音频和视频解码\/渲染/);
+  assert.match(text('client-push-pull'), /既有声音又有画面/);
+  assert.match(text('remote-managers'), /发送端.*信令.*目标客户端.*实际状态变化或回执/);
+  assert.match(text('package-selftest'), /登录→负载分配→音视频推流→拉流播放→一条远程指令→停止退出/);
+});
+
+test('Studio practice proves the original visible features and keeps hardware or external-service limits truthful', () => {
+  const text = suffix => {
+    const task = byId.get(`edoyun-module-v1-studio-course-${suffix}`);
+    assert.ok(task);
+    return [...task.steps, ...task.deliverables].join(' ');
+  };
+  assert.match(text('environment-qt'), /Windows.*阻塞/);
+  assert.match(text('winrt-camera'), /实际获取连续画面/);
+  assert.match(text('wasapi-buffer'), /麦克风.*系统回环/);
+  assert.match(text('mix-sync'), /双路混音|两路.*混音/);
+  assert.match(text('yunet-effects'), /人脸\/无人脸.*YuNet/);
+  assert.match(text('yunet-effects'), /可见.*特效|特效开关对照/);
+  assert.match(text('scene-editing'), /至少两个真实源.*Z序/);
+  assert.match(text('scene-editing'), /JSON.*关闭重开/);
+  assert.match(text('ai-hook'), /关闭\/重新启用Hook/);
+  assert.match(text('cuda-compare'), /CPU功能.*CUDA不可测/);
+  assert.match(text('selftest-handoff'), /采集→混音\/转换→编码→直播与录制→文件完整解码/);
+  assert.match(text('selftest-handoff'), /未验证云同步\/CUDA优化/);
+});
+
+test('each practice output belongs to its full module instead of being copied into a preparation-only slice', () => {
+  const outputs = new Map();
+  for (const task of practice) for (const output of task.deliverables) {
+    assert.ok(!outputs.has(output), `${task.id}: a second task cannot require the same full-module output`);
+    outputs.set(output, task.id);
+  }
+  const cloud = byId.get('edoyun-module-v1-yunzhujiao-environment-codecs');
+  assert.match(cloud.steps.join(' '), /编.*解码|编码\/解码/);
+  assert.match(cloud.deliverables.join(' '), /编解码结果/);
+  const cuda = byId.get('edoyun-module-v1-studio-course-cuda-compare');
+  assert.match(cuda.steps.join(' '), /实际跑通CPU功能/);
+  assert.match(cuda.deliverables.join(' '), /CPU可运行结果/);
+  assert.ok(!tasks.some(task => /^ydy-practice-v[234]-/.test(task.id)), 'Retired partial-module slices are history only');
+});
+
+test('Edoyun projects stay strictly serial through their final required practice and acceptance', () => {
+  const ordered = ['yibo', 'yunzhujiao', 'studio-course'];
+  for (let index = 1; index < ordered.length; index++) {
+    const previous = required.filter(task => task.projectId === ordered[index - 1]);
+    const next = required.filter(task => task.projectId === ordered[index]);
+    const finalDate = previous.map(endDate).sort().at(-1);
+    assert.ok(next.every(task => task.date > finalDate), 'No course project begins before prior project sessions finish');
+    for (const task of next) {
+      const needed = ancestors(task);
+      for (const prerequisite of previous)
+        assert.ok(needed.has(prerequisite.id), `${task.id}: actual previous project completion is required`);
+    }
+  }
+  const finalCourse = byId.get('edoyun-module-v1-studio-course-selftest-handoff');
+  assert.ok(endDate(finalCourse) <= '2027-05-31');
+  assert.equal(endDate(finalCourse), data.planRhythm.courseWrapUpDate);
+  assert.equal(endDate(finalCourse), data.planRhythm.practiceCompletionDate);
+  assert.equal(data.planRhythm.courseAccessDeadline, '2027-06-07');
+  const firstStudio = practice.find(task => task.projectId === 'studio-course');
+  assert.equal(firstStudio.date, '2027-02-20');
+});
+
+test('the teacher workflow consumes the original course work without replacement polishing gates', () => {
+  assert.ok(!tasks.some(task => task.phaseId === 'projects' || task.activity === 'portfolio'
+    || task.activity === 'deepening' || task.id.startsWith('studio-portfolio-v1-')));
+  assert.ok(!data.milestones.some(goal => ['studio-portfolio', 'studio-rtc', 'studio-validation', 'studio-baseline'].includes(goal.id)));
+  assert.equal(Object.hasOwn(data, 'portfolioScope'), false);
+  for (const key of ['portfolioMinutes', 'deepeningMinutes', 'deepeningRangeMinutes'])
+    assert.equal(Object.hasOwn(data.estimationPolicy, key), false);
+  for (const key of ['projectStartDate', 'projectEndDate'])
+    assert.equal(Object.hasOwn(data.planRhythm, key), false);
+  assert.equal(data.estimationPolicy.onDemandReserveMinutes, 300);
+  assert.equal(data.estimationPolicy.optionalExtensionsScheduledMinutes, 0);
+  const gate = byId.get('edoyun-module-v1-studio-course-selftest-handoff');
+  assert.ok(ancestors(preparation[0]).has(gate.id));
+  for (const task of reviews) {
+    assert.ok(ancestors(task).has(gate.id));
+    assert.ok([...ancestors(task)].every(id => !id.startsWith('studio-portfolio-v1-') && !id.startsWith('studio-functional-v1-')));
+  }
+  const retiredGoals = data.legacyMilestones.filter(goal => ['studio-rtc', 'studio-validation'].includes(goal.id));
+  assert.equal(digest(retiredGoals), '2b02bc2cddcfa4aaf2dd2cd3667f4b8d274503e0677eb902e10695b033a19339');
+  const retiredPortfolio = data.legacyMilestones.find(goal => goal.id === 'studio-portfolio');
+  assert.equal(digest(retiredPortfolio), '904d58dbaff96688370a1e85d12af39f0c386b7b75beecc2afba295cdd5f4b11',
+    'An acceptance for the removed independent scope is preserved as history, not inherited by the course self-test');
+});
+
+test('larger extensions are reference material without tasks, budgets or completion gates', () => {
+  assert.ok(Array.isArray(data.optionalExtensions) && data.optionalExtensions.length > 0);
+  for (const item of data.optionalExtensions) {
+    assert.ok(item.title?.trim() || typeof item === 'string' && item.trim());
+    assert.ok(!item.id || !byId.has(item.id));
+    for (const key of ['durationMinutes', 'budget', 'workSessions', 'taskIds', 'date', 'startDate', 'endDate', 'prerequisiteTaskIds'])
+      assert.equal(Object.hasOwn(item, key), false, `${key}: optional reading cannot inflate the fixed curriculum`);
+  }
+  const descriptions = data.optionalExtensions.map(item => typeof item === 'string' ? item : JSON.stringify(item)).join(' ');
+  assert.match(descriptions, /WebRTC|TURN|MESH|SFU/);
+  assert.match(descriptions, /ABR|弱网|负载|并发/);
+  const laterPortfolio = data.optionalExtensions.find(item => item.id === 'studio-portfolio-later');
+  assert.ok(laterPortfolio, 'Canceled polishing is available as read-only reference, with no current tasks');
+  for (const key of ['record-index', 'playback', 'diagnose', 'delivery'])
+    assert.ok(laterPortfolio.historicalTaskIds.includes(`studio-portfolio-v1-${key}`));
+  assert.ok(laterPortfolio.historicalReviewKeys.includes('milestone:portfolio-v1-studio-portfolio'));
+});
+
+test('optional remediation is an on-demand pool and never becomes an unconditional learning or career prerequisite', () => {
+  const optional = tasks.filter(task => task.optional === true);
+  assert.equal(optional.length, 1);
+  const remediation = optional;
+  assert.equal(remediation.length, 1);
+  assert.equal(remediation[0].phaseId, 'courses');
+  for (const task of remediation) {
+    assert.equal(task.onDemand, true);
+    assert.equal(sessions(task).length, 0, 'Optional repair is not booked on top of an already full project Saturday');
+    assert.ok(task.durationMinutes > 0 && Number.isInteger(task.durationMinutes));
+    assert.match([...task.steps, ...task.deliverables].join(' '), /无需|没有缺口|无缺陷|无需补漏/);
+  }
+  for (const task of required) for (const id of ancestors(task))
+    assert.notEqual(byId.get(id).optional, true, `${task.id}: an unused optional pool cannot block completion`);
+});
+
+test('complete project and weekend skill modules precede an undated zero-hour teacher confirmation and fifteen relative interview tasks', () => {
+  assert.equal(reviews.length, 23);
+  assert.equal(preparation.length, 7);
+  assert.ok(preparation.every(task => task && task.optional !== true && Number.isInteger(task.durationMinutes)));
+  assert.equal(sum(preparation.map(task => task.durationMinutes)), 800);
+  assert.equal(digest(preparation.map(curriculumContent)), 'ff91d97a7d22cc0b761cd2470fa0fd1093738d2645502b546c336e66fc745826',
+    'All seven material modules retain content and complete budgets while calendar sessions move');
+  assert.deepEqual(workflow.projectPreparationTaskIds, ['remote', 'yibo', 'cloud', 'studio'].map(key => `career-materials-v2-${key}`));
+  assert.deepEqual(workflow.skillPreparationTaskIds, ['av', 'build', 'cpp'].map(key => `career-materials-v2-skills-${key}`));
+  assert.deepEqual([...workflow.preparationTaskIds].sort(), [...workflow.projectPreparationTaskIds, ...workflow.skillPreparationTaskIds].sort());
+  assert.equal(teacher.id, 'career-teacher-v1-confirmation');
+  assert.equal(teacher.scheduleKind, 'external');
+  assert.equal(teacher.activity, 'external-confirmation');
+  assert.equal(teacher.durationMinutes, 0);
+  assert.deepEqual(teacher.budget, { videoMinutes: 0, practiceMinutes: 0, bufferMinutes: 0 });
+  assert.match([...teacher.steps, ...teacher.deliverables].join(' '), /老师|教师|导师/);
+  for (const task of preparation) assert.ok(ancestors(teacher).has(task.id));
+  assert.equal(interviews.length, 15);
+  assert.equal(digest(interviews), 'd92b025cbf35362b6a8a42cf28947bbca3763a9e29fd35417bbdf3dd11829ce3', 'All fifteen interview objects remain unchanged');
+  assert.deepEqual(interviews.map(task => task.relativeOrder), Array.from({ length: 15 }, (_, index) => index + 1));
+  for (const task of [teacher, ...interviews]) {
+    for (const key of ['date', 'day', 'startDate', 'endDate']) assert.equal(Object.hasOwn(task, key), false);
+    assert.deepEqual(task.workSessions, []);
+    assert.equal(sessions(task).length, 0, 'Waiting and relative work have no made-up fixed calendar slots');
+    assert.equal(task.week, 36, 'The outline has a home without implying a dated session');
+  }
+  for (const task of interviews) {
+    assert.equal(task.scheduleKind, 'after-event');
+    assert.equal(task.anchorTaskId, teacher.id);
+    assert.equal(task.durationMinutes, 40);
+    assert.ok(ancestors(task).has(teacher.id), 'Advance completion cannot erase the real teacher-confirmation prerequisite');
+  }
+  const unchangedInterviews = interviews.filter(task => !['career-teacher-v1-feedback', 'career-teacher-v1-remote-interview'].includes(task.id));
+  assert.equal(unchangedInterviews.length, 13);
+  const scheduleFields = new Set(['date', 'startDate', 'endDate', 'week', 'day', 'workSessions', 'duration', 'summary',
+    'prerequisiteTaskIds', 'scheduleKind', 'anchorTaskId', 'relativeOrder']);
+  assert.equal(digest(unchangedInterviews.map(task => Object.fromEntries(Object.entries(task)
+    .filter(([key]) => !scheduleFields.has(key))))),
+  'fbb1aa1bf0cfba57304280a25662b8a889e03dce05931cd0101d870821ab86b6',
+  'The thirteen original technical topics keep their content rather than inheriting newly required project work');
+  assert.equal(digest(interviews.map(task => Object.fromEntries(Object.entries(task).filter(([key]) => key !== 'week')))),
+    '2a781281b74ae6323485141e430e0c084d545335443b83afd8a4b2ac850d03e3', 'All fifteen original interview task objects change only their outline week');
+  const feedback = byId.get('career-teacher-v1-feedback');
+  assert.equal(interviews.at(-1).id, feedback.id);
+  assert.match([...feedback.steps, ...feedback.deliverables].join(' '), /老师|教师|导师/);
+  const careerSessions = allSessions.filter(session => session.task.track === 'review');
+  assert.equal(careerSessions.length, 17);
+  assert.equal(sum(careerSessions.map(session => session.minutes)), 800);
+  assert.equal(sum(reviews.map(task => task.durationMinutes)), 1400);
+  for (const task of reviews) for (const prerequisite of learning)
+    assert.ok(ancestors(task).has(prerequisite.id), `${task.id}: actual original learning still precedes the career workflow`);
+  assert.deepEqual(data.applicationMilestone.readinessTaskIds, [...workflow.preparationTaskIds, teacher.id]);
+  assert.ok(!data.applicationMilestone.start && !data.applicationMilestone.end);
+  assert.match(data.applicationMilestone.timingLabel, /实际|确认|简历/);
+  for (const key of ['interviewStartDate', 'interviewCompletionDate', 'planEndDate'])
+    assert.equal(Object.hasOwn(data.planRhythm, key), false, 'External delivery cannot be assigned a guaranteed date');
+});
+
+test('the already completed remote-control project is prepared for career discussion without being scheduled for relearning', () => {
+  assert.equal(digest(data.completedProjects), '525d40f5e5bdbc638cf947f83bf4fada2083282c48c34829b6046fee5e94f631',
+    'The original remote-control completion acknowledgement keeps its truthful dates');
+  const remoteMaterials = byId.get('career-materials-v2-remote');
+  const remoteInterview = byId.get('career-teacher-v1-remote-interview');
+  assert.ok(remoteMaterials && remoteInterview);
+  assert.equal(workflow.preparationTaskIds[0], remoteMaterials.id);
+  assert.equal(workflow.interviewTaskIds[4], remoteInterview.id);
+  assert.equal(remoteInterview.relativeOrder, 5);
+  assert.equal(remoteMaterials.durationMinutes, 160);
+  assert.equal(remoteInterview.durationMinutes, 40);
+  for (const task of [remoteMaterials, remoteInterview]) {
+    assert.equal(task.track, 'review');
+    assert.ok(!task.learningSegments?.length && !task.segments?.length);
+    assert.match([task.title, task.summary, ...task.steps, ...task.deliverables].join(' '), /远控/);
+    assert.match([task.summary, ...task.steps].join(' '), /已完成|已有|回顾|复用/);
+  }
+  assert.equal(learning.length, 184);
+  assert.ok(learning.filter(task => task.track === 'ydy')
+    .every(task => ['yibo', 'yunzhujiao', 'studio-course'].includes(task.projectId)));
+  const teacherText = [...teacher.steps, ...teacher.deliverables].join(' ');
+  for (const name of ['远控', '易播', '云助教', 'Course Studio'])
+    assert.ok(teacherText.includes(name), `The teacher discussion includes ${name}`);
+  assert.match(teacherText, /材料|入口|汇总/);
+  assert.match(teacherText, /问题|提问|沟通/);
+  assert.ok(!byId.has('career-teacher-v1-brief'), 'The old short brief is history rather than an extra current task');
+  assert.ok(ancestors(teacher).has(remoteMaterials.id));
+  assert.ok(ancestors(remoteInterview).has(teacher.id));
+});
+
+test('four project modules use fourteen serial forty-minute weekdays while three skill modules run independently on Saturday', () => {
+  const expected = [
+    ['remote', 160, '2027-05-24', '2027-05-27'],
+    ['yibo', 80, '2027-05-28', '2027-05-31'],
+    ['cloud', 200, '2027-06-01', '2027-06-07'],
+    ['studio', 120, '2027-06-08', '2027-06-10']
+  ];
+  const projectModules = workflow.projectPreparationTaskIds.map(id => byId.get(id));
+  const skills = workflow.skillPreparationTaskIds.map(id => byId.get(id));
+  for (const [index, [key, minutes, start, end]] of expected.entries()) {
+    const task = byId.get(`career-materials-v2-${key}`);
+    assert.equal(task.durationMinutes, minutes);
+    assert.equal(task.date, start);
+    assert.equal(endDate(task), end);
+    assert.equal(task.workSessions.length, minutes / 40);
+    assert.ok(task.workSessions.every(session => session.minutes === 40 && weekday(session.date) > 0 && weekday(session.date) < 6));
+    assert.ok(task.steps.length >= 2 && task.deliverables.length);
+    assert.equal(tasks.filter(item => item.id === task.id).length, 1);
+    if (index) {
+      const previous = projectModules[index - 1];
+      assert.ok(ancestors(task).has(previous.id));
+      assert.ok(endDate(previous) < task.date);
+    }
+    for (const skill of skills) assert.ok(!ancestors(task).has(skill.id), 'Weekend skill learning cannot block the weekday project sequence');
+  }
+  assert.equal(sum(projectModules.flatMap(task => task.workSessions).map(session => session.minutes)), 14 * 40);
+  assert.deepEqual(skills.map(task => [task.durationMinutes, task.date]), [[120, '2027-05-29'], [60, '2027-06-05'], [60, '2027-06-05']]);
+  for (const task of skills) {
+    assert.ok(task.workSessions.every(session => weekday(session.date) === 6));
+    for (const project of projectModules) assert.ok(!ancestors(task).has(project.id), 'Skills remain available even while a long project module is unfinished');
+    assert.ok(ancestors(teacher).has(task.id));
+  }
+  assert.match([...skills[0].steps, ...skills[0].deliverables].join(' '), /音视频|编码|采集|同步/);
+  assert.match([...skills[1].steps, ...skills[1].deliverables].join(' '), /CMake/);
+  assert.match([...skills[1].steps, ...skills[1].deliverables].join(' '), /Makefile|Make/);
+  assert.match([...skills[2].steps, ...skills[2].deliverables].join(' '), /C\+\+17/);
+});
+
+test('retired residual-budget tasks keep exact historical metadata without remaining current assignments', () => {
+  const references = data.legacyReferenceTasks;
+  const original14Ids = new Set([
+    ...[32, 33, 34].flatMap(week => [2, 3, 4].map(day => `av52-may-v1-w${week}-${day}-course-practice`)),
+    ...['2-project', '3-project', '4-project', '5-build', '5-verify'].map(suffix => `av52-may-v1-w46-${suffix}`)
+  ]);
+  const old14 = references.filter(task => original14Ids.has(task.id));
+  assert.equal(old14.length, 14);
+  assert.equal(digest(old14), '903a1c096fb3c79269b9b37fbd1cea4dd109a4d448f11267b7446f00ec3fe313');
+  const oldFunctional = references.filter(task => task.id.startsWith('studio-functional-v1-') && task.optional !== true).sort((a, b) => a.id.localeCompare(b.id));
+  assert.equal(oldFunctional.length, 11);
+  assert.equal(digest(oldFunctional), '311a48859b633b9148c6b11070d247b66aa81cea54454a516caaec8e0032c042',
+    'The retired 90-hour design remains exact history rather than a current learning gate');
+  const retiredPortfolio = references.filter(task => task.id.startsWith('studio-portfolio-v1-')
+    || task.id === 'studio-functional-v1-optional-remediation').sort((a, b) => a.id.localeCompare(b.id));
+  assert.equal(retiredPortfolio.length, 5);
+  assert.equal(digest(retiredPortfolio), 'df7aef3108249590dd5f376dc5afdc52acc8d394f539a6611b71db51f43ee8c3',
+    'Canceled polishing modules and their optional pool retain their full original metadata');
+  const retiredCareerIds = new Set(['target', 'evidence', 'resume', 'demo', 'resume-revision'].map(key => `career-focused-v1-${key}`));
+  const retiredCareer = references.filter(task => retiredCareerIds.has(task.id)).sort((a, b) => a.id.localeCompare(b.id));
+  assert.equal(retiredCareer.length, 5);
+  assert.equal(digest(retiredCareer), '75da3a566461750fa45947b18762dfe488ce7bde95b262a50b21598794c2e693',
+    'Old self-written resume steps remain exact history rather than completed teacher collaboration');
+  const retiredPreparationIds = new Set(['remote-materials', 'yibo-materials', 'cloud-materials', 'studio-materials', 'skills', 'brief']
+    .map(key => `career-teacher-v1-${key}`));
+  const retiredPreparation = references.filter(task => retiredPreparationIds.has(task.id)).sort((a, b) => a.id.localeCompare(b.id));
+  assert.equal(retiredPreparation.length, 6);
+  assert.equal(digest(retiredPreparation), 'a23b23af5b585c9ce34a1842dfb1e361c8333df96a211737d0176458dc4bda4d',
+    'The superseded short material check-ins keep their full original dates, estimates, content and references');
+  assert.equal(references.length, 212);
+  const retiredVersions = references.filter(task => RETIRED_FLV_IDS.has(task.id));
+  assert.equal(retiredVersions.length, 2);
+  assert.equal(digest(retiredVersions), '52b94a5cb7862ddd9843a0299851d5ad55a0bb332a74436fddc98eac52bbcbed',
+    'Retired versions retain the exact old task definitions for saved-record lookup');
+  const earlierReferences = references.filter(task => !RETIRED_FLV_IDS.has(task.id));
+  assert.equal(digest(earlierReferences), '15febc5da238df4719501ccc36bc21d4349f7c4f971efe648c4f9890f239970f', 'Removing versions never rewrites earlier archives');
+  assert.equal(digest(earlierReferences.filter(task => !retiredPreparationIds.has(task.id))),
+    'ee6354ad5998e8cfdc42d904edb98370d63ceafc506cce43ecc1d872bb93fe90', 'The earlier 204 historical tasks remain unchanged');
+  const retiredPortfolioIds = new Set(retiredPortfolio.map(task => task.id));
+  const oldFunctionalIds = new Set(oldFunctional.map(task => task.id));
+  const retired = earlierReferences.filter(task => !original14Ids.has(task.id) && !oldFunctionalIds.has(task.id) && !retiredPortfolioIds.has(task.id) && !retiredCareerIds.has(task.id) && !retiredPreparationIds.has(task.id)).sort((a, b) => a.id.localeCompare(b.id));
+  assert.equal(retired.length, 169);
+  assert.equal(digest(retired), 'b176ebb9fa8c71c0bf30e94295f3a543333b2b678fd59a17126519ef9575581b',
+    'Earlier titles, steps, dates, budgets and dependencies remain truthful historical snapshots');
+  assert.ok(references.every(task => !byId.has(task.id)));
+  assert.equal(new Set(references.map(task => task.id)).size, references.length);
+  assert.equal(digest(data.legacyVideoTasks.filter(task => task.track !== 'ls')), 'c65bbee716427fca93a8b0ae36739df66ba828c5a2f68396c2667049575c1eee');
+  assert.equal(digest(data.legacyPracticeTasks), '7ff6ad7b5dcfdf019de8501b416736c3b0db60b472e7c102632165817a54b1db');
+  const archives = new Set([...references, ...data.legacyPracticeTasks, ...data.legacyVideoTasks].map(task => task.id));
+  for (const task of tasks) for (const id of task.historicalTaskIds || [])
+    assert.ok(archives.has(id), `${task.id}: historical reference resolves`);
+});
+
+test('all task budgets and session-based prerequisite boundaries are internally consistent', () => {
+  const order = new Map(tasks.map((task, index) => [task.id, index]));
   for (const task of tasks) {
-    assert.ok(typeof task.activity === 'string' && task.activity.trim(), `${task.id}: activity`);
-    assert.ok(typeof task.summary === 'string' && task.summary.trim(), `${task.id}: summary`);
-    if (!task.id.startsWith('ls40-')) {
-      assert.ok(Array.isArray(task.steps) && task.steps.length > 0 && task.steps.every(step => typeof step === 'string' && step.trim()), `${task.id}: executable steps`);
-      assert.ok(Array.isArray(task.deliverables) && task.deliverables.length > 0 && task.deliverables.every(item => typeof item === 'string' && item.trim()), `${task.id}: deliverables`);
+    assert.ok(task.activity?.trim() && task.summary?.trim());
+    assert.ok(task.budget && ['videoMinutes', 'practiceMinutes', 'bufferMinutes'].every(key => Number.isFinite(task.budget[key]) && task.budget[key] >= 0));
+    almostEqual(sum(Object.values(task.budget)), task.durationMinutes, `${task.id}: budget matches total estimate`);
+    const genuineVideo = task.learningSegments?.length ? sum(task.learningSegments.map(segment => (segment.endSecond - segment.startSecond) / 60))
+      : sum((task.segments || []).map(segment => segment.endMinute - segment.startMinute));
+    almostEqual(task.budget.videoMinutes, genuineVideo, `${task.id}: estimates cannot masquerade as course footage`);
+    if (task.track !== 'ls') {
+      assert.ok(task.steps?.length && task.deliverables?.length);
+      assert.ok(task.steps.every(step => typeof step === 'string' && step.trim()));
+      assert.ok(task.deliverables.every(item => typeof item === 'string' && item.trim()));
     }
-    if (task.track === 'ydy') assert.ok(typeof task.projectId === 'string' && task.projectId.trim(), `${task.id}: linked project`);
-    assert.ok(task.budget && ['videoMinutes', 'practiceMinutes', 'bufferMinutes'].every(key => Number.isFinite(task.budget[key]) && task.budget[key] >= 0), `${task.id}: nonnegative budget components`);
-    almostEqual(task.budget.videoMinutes + task.budget.practiceMinutes + task.budget.bufferMinutes, task.durationMinutes, `${task.id}: budget equals task time`);
-    const seconds = sum((task.learningSegments || []).map(segment => segment.endSecond - segment.startSecond));
-    const originalMinutes = sum((task.segments || []).map(segment => segment.endMinute - segment.startMinute));
-    almostEqual(task.budget.videoMinutes, seconds / 60 + originalMinutes, `${task.id}: video budget equals actual assigned viewing`);
-    if (task.track === 'ydy' && !task.learningSegments?.length) assert.ok(task.budget.practiceMinutes + task.budget.bufferMinutes > 0, 'Non-video project blocks reserve time for implementation or validation');
-  }
-});
-
-test('milestone ownership is complete, unique and resolves to scheduled tasks', () => {
-  const taskIds = tasks.map(task => task.id);
-  assert.equal(data.milestones.filter(goal => goal.kind === 'project').length, 6);
-  assert.equal(data.milestones.filter(goal => goal.kind === 'parallel').length, 2);
-  const career = data.milestones.find(goal => goal.id === 'career');
-  assert.equal(career.kind, 'parallel');
-  assert.deepEqual([...career.taskIds].sort(), tasks.filter(task => task.track === 'review').map(task => task.id).sort(), 'Interview tasks belong solely to the career milestone');
-  assert.equal(data.applicationMilestone.start, '2027-10-04');
-  assert.equal(data.applicationMilestone.end, '2027-10-17');
-  assert.ok(data.applicationMilestone.prerequisiteIds.every(id => data.milestones.some(goal => goal.id === id)), 'Application requirements cannot retain a removed milestone');
-  assert.equal(new Set(data.milestones.map(goal => goal.id)).size, data.milestones.length);
-  const assigned = data.milestones.flatMap(goal => {
-    assert.ok(goal.taskIds.length > 0);
-    assert.ok(['project', 'parallel'].includes(goal.kind));
-    return goal.taskIds;
-  });
-  assert.equal(new Set(assigned).size, assigned.length, 'A check-in must not advance two goals');
-  assert.deepEqual([...assigned].sort(), [...taskIds].sort(), 'Every task advances exactly one milestone');
-});
-
-test('practice dependencies are reachable without cycles and weekday outputs are distinct', () => {
-  const byId = new Map(tasks.map(task => [task.id, task]));
-  const visiting = new Set();
-  const visited = new Set();
-  function visit(task) {
-    assert.ok(!visiting.has(task.id), `${task.id}: dependency cycle would obstruct continuing learning`);
-    if (visited.has(task.id)) return;
-    visiting.add(task.id);
+    ancestors(task);
     for (const id of task.prerequisiteTaskIds || []) {
-      assert.ok(byId.has(id), `${task.id}: prerequisite ${id} exists`);
-      assert.ok(byId.get(id).date <= task.date, `${task.id}: prerequisite must not be assigned later`);
-      visit(byId.get(id));
+      const parent = byId.get(id);
+      if (task.date && endDate(parent)) assert.ok(endDate(parent) <= task.date, `${task.id}: prerequisite sessions finish before dependent work begins`);
+      assert.ok(order.get(id) < order.get(task.id), 'Same-day prerequisites precede consumers in the display order');
     }
-    visiting.delete(task.id); visited.add(task.id);
   }
-  tasks.forEach(visit);
-  const weekdays = data.weeks.filter(week => week.phaseId === 'projects').flatMap(week => week.tasks.filter(task => task.track === 'ydy' && weekday(task.date) !== 6));
-  assert.equal(weekdays.length, 54);
-  assert.ok(weekdays.every(task => task.durationMinutes === 40));
-  assert.equal(new Set(weekdays.map(task => task.deliverables.join('；'))).size, 54, 'Each forty-minute project task produces its own specific output');
-  const catchup = tasks.filter(task => task.date === '2027-05-29');
-  assert.equal(sum(catchup.map(task => task.budget.bufferMinutes)), 300, 'Both final Saturday blocks are available for unfinished coursework before engineering checks');
-  assert.ok(catchup.every(task => task.activity === 'buffer'));
+});
+
+test('milestones own current modules once and use the last required session as their delivery date', () => {
+  const assigned = [], requiredAssigned = [], optionalAssigned = [];
+  assert.equal(new Set(data.milestones.map(goal => goal.id)).size, data.milestones.length);
+  for (const goal of data.milestones) {
+    assert.ok(goal.taskIds?.length, `${goal.id}: retired empty baseline milestones are removed`);
+    const owned = goal.taskIds.map(id => byId.get(id));
+    assert.ok(owned.every(Boolean));
+    assert.ok(owned.every(task => task.goalId === goal.id));
+    const requiredOwned = owned.filter(task => task.optional !== true);
+    if (requiredOwned.some(task => ['external', 'after-event'].includes(task.scheduleKind)))
+      assert.ok(!goal.date, 'The career milestone follows actual collaboration instead of the last dated preparation session');
+    else if (requiredOwned.length) assert.equal(goal.date, requiredOwned.map(endDate).sort().at(-1));
+    assigned.push(...goal.taskIds);
+    requiredAssigned.push(...requiredOwned.map(task => task.id));
+    optionalAssigned.push(...owned.filter(task => task.optional === true).map(task => task.id));
+  }
+  assert.equal(new Set(assigned).size, assigned.length);
+  assert.deepEqual(requiredAssigned.slice().sort(), required.map(task => task.id).sort());
+  assert.deepEqual(optionalAssigned, [], 'On-demand repair pools stay separate from fixed milestone work');
+  const courses = data.milestones.find(goal => goal.id === 'courses');
+  assert.equal(courses.taskIds.length, 122);
+  assert.equal(courses.taskIds.filter(id => byId.get(id).optional !== true).length, 122);
+  assert.ok(tasks.filter(task => task.optional === true).every(task => data.milestones.some(goal => goal.id === task.goalId)),
+    'On-demand pools retain a visible project owner without entering its required count');
 });

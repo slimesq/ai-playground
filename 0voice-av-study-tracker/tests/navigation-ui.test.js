@@ -155,9 +155,10 @@ test('queued navigation stops if the restored task receives a new unsaved edit',
 test('prerequisite navigation returns to its task dialog and exact background search, while a new task opens at the top', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
   const target = await page.evaluate(() => {
-    const task = allTasks.find(item => item.week === 32 && item.prerequisiteTaskIds?.some(id => taskById.get(id)?.week === 31));
-    const prerequisiteId = task.prerequisiteTaskIds.find(id => taskById.get(id)?.week === 31);
-    return { id: task.id, prerequisiteId, week: task.week };
+    const task = allTasks.find(item => item.projectId === 'studio-course' && item.activity === 'practice'
+      && item.prerequisiteTaskIds?.some(id => taskById.get(id)?.projectId === 'studio-course' && taskById.get(id)?.week < item.week));
+    const prerequisiteId = task.prerequisiteTaskIds.find(id => taskById.get(id)?.projectId === 'studio-course' && taskById.get(id)?.week < task.week);
+    return { id: task.id, prerequisiteId, prerequisiteWeek: taskById.get(prerequisiteId).week, week: task.week };
   });
   await planner(page);
   await page.locator('#weekSelect').selectOption('7');
@@ -169,11 +170,11 @@ test('prerequisite navigation returns to its task dialog and exact background se
   assert.ok(beforeY > 300);
   await card.locator('.task-title').click();
   assert.equal(await page.locator('#taskDialog').isVisible(), true);
-  await page.locator(`#taskDialogBody [data-prerequisite-task-id="${target.prerequisiteId}"]`).click();
-  await page.waitForFunction(() => document.querySelector('#weekSelect')?.value === '31');
+  await page.locator(`#taskDialogBody .detail-prerequisites [data-prerequisite-task-id="${target.prerequisiteId}"]`).click();
+  await page.waitForFunction(week => document.querySelector('#weekSelect')?.value === String(week), target.prerequisiteWeek);
   assert.equal(await page.locator('#taskDialog').isVisible(), false);
   assert.equal(await page.locator('#plannerView').isVisible(), true);
-  assert.equal(await page.locator('#weekSelect').inputValue(), '31');
+  assert.equal(await page.locator('#weekSelect').inputValue(), String(target.prerequisiteWeek));
   assert.equal(await page.locator(`#weekTasks [data-task-id="${target.prerequisiteId}"]`).isVisible(), true);
   await page.locator('#navigationBackBtn').click();
   assert.equal(await page.locator('#taskDialog').isVisible(), true);
@@ -183,9 +184,9 @@ test('prerequisite navigation returns to its task dialog and exact background se
   assert.equal(await page.locator('#weekSelect').inputValue(), '7');
   await page.waitForFunction(y => Math.abs(scrollY - y) <= 30, beforeY);
   await page.locator('#taskHistoryForwardBtn').click();
-  await page.waitForFunction(() => document.querySelector('#weekSelect')?.value === '31');
+  await page.waitForFunction(week => document.querySelector('#weekSelect')?.value === String(week), target.prerequisiteWeek);
   assert.equal(await page.locator('#taskDialog').isVisible(), false);
-  assert.equal(await page.locator('#weekSelect').inputValue(), '31');
+  assert.equal(await page.locator('#weekSelect').inputValue(), String(target.prerequisiteWeek));
 
   await page.locator(`#weekTasks [data-task-id="${target.prerequisiteId}"] .task-title`).click();
   await page.locator('#taskDialog').evaluate(element => { element.scrollTop = element.scrollHeight; });
@@ -196,29 +197,82 @@ test('prerequisite navigation returns to its task dialog and exact background se
   assert.equal(await page.locator('#taskDialog').evaluate(element => element.scrollTop), 0);
 });
 
-test('project acceptance Back and Forward restore the review, while canceling a dirty draft keeps it open', { timeout: 30_000 }, async t => {
+test('career prerequisite navigation opens the teacher section and Back and Forward restore its disclosure and focus', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
-  const projectId = await page.evaluate(() => DATA.milestones.find(goal => goal.kind === 'project').id);
-  await page.locator('.nav-item[data-view="milestones"]').click();
-  await page.locator(`#milestone-review-${projectId}`).click();
-  assert.equal(await page.locator('#milestoneReviewDialog').isVisible(), true);
-  await page.locator('#milestoneEvidence').fill('尚未保存的演示地址');
-  await page.locator('#reviewHistoryBackBtn').click();
-  await page.locator('#confirmDialog').waitFor({ state: 'visible' });
-  await page.locator('#confirmCancelBtn').click();
-  assert.equal(await page.locator('#milestoneReviewDialog').isVisible(), true);
-  assert.equal(await page.locator('#milestoneEvidence').inputValue(), '尚未保存的演示地址');
-  assert.equal(await page.evaluate(id => state.entries[`milestone:${id}`], projectId), undefined);
+  const target = await page.evaluate(() => {
+    const stamp = freshTimestamp();
+    for (const task of requiredLearningTasks()) state.entries[task.id] = createEntry(true, stamp);
+    for (const id of DATA.careerWorkflow.preparationTaskIds) state.entries[id] = createEntry(true, stamp);
+    localRevision++; saveState(); render();
+    return { teacher: DATA.careerWorkflow.teacherTaskId, interview: DATA.careerWorkflow.interviewTaskIds[0] };
+  });
+  await planner(page);
+  await page.locator('#phase-career').click();
+  const teacher = page.locator('#weekTasks details[data-career-section="teacher"]');
+  const interviews = page.locator('#weekTasks details[data-career-section="interviews"]');
+  assert.equal(await teacher.evaluate(section => section.open), false);
+  assert.equal(await interviews.evaluate(section => section.open), false);
+  await page.locator('#career-section-interviews').click();
+  await page.waitForFunction(() => captureLocation().careerSections.includes('interviews'));
+  await interviews.locator(`.task-card[data-task-id="${target.interview}"] .task-title`).click();
+  assert.equal(await page.evaluate(() => detailTaskId), target.interview);
+  await page.locator(`#taskDialogBody [data-prerequisite-task-id="${target.teacher}"]`).click();
+  await page.waitForFunction(id => !$('taskDialog').open && $('plannerView').classList.contains('is-career-plan')
+    && document.activeElement?.dataset.taskAction === 'details'
+    && document.activeElement.closest('[data-task-id]')?.dataset.taskId === id, target.teacher);
+  assert.equal(await teacher.evaluate(section => section.open), true,
+    'Navigating to a task expands its containing stage before focusing its real row');
+  assert.equal(await teacher.locator(`.task-card[data-task-id="${target.teacher}"]`).isVisible(), true);
+  assert.deepEqual(await page.evaluate(() => captureLocation().careerSections.sort()), ['interviews', 'teacher']);
 
-  await page.locator('#reviewHistoryBackBtn').click();
-  await page.locator('#confirmAcceptBtn').click();
-  await page.locator('#milestoneReviewDialog').waitFor({ state: 'hidden' });
+  await page.locator('#navigationBackBtn').click();
+  await page.locator('#taskDialog').waitFor({ state: 'visible' });
+  assert.equal(await page.evaluate(() => detailTaskId), target.interview);
+  assert.equal(await teacher.evaluate(section => section.open), false,
+    'Back restores the teacher section as it was before prerequisite navigation');
+  assert.equal(await interviews.evaluate(section => section.open), true);
+  assert.deepEqual(await page.evaluate(() => captureLocation().careerSections), ['interviews']);
+
+  await page.locator('#taskHistoryForwardBtn').click();
+  await page.waitForFunction(id => !$('taskDialog').open
+    && document.activeElement?.dataset.taskAction === 'details'
+    && document.activeElement.closest('[data-task-id]')?.dataset.taskId === id, target.teacher);
+  assert.equal(await teacher.evaluate(section => section.open), true);
+  assert.equal(await interviews.evaluate(section => section.open), true);
+  assert.deepEqual(await page.evaluate(() => captureLocation().careerSections.sort()), ['interviews', 'teacher']);
+});
+
+test('project history stays read-only while Back and Forward navigate its actual task', { timeout: 30_000 }, async t => {
+  const page = await pageAt(t);
+  const target = await page.evaluate(() => {
+    const goal = DATA.milestones.find(item => item.kind === 'project');
+    const key = milestoneReviewKey(goal);
+    const record = createEntry(true, '2026-10-07T00:00:00.000Z', '旧项目说明 https://example.test/original');
+    state.entries[key] = record;
+    saveState(); render();
+    return { id: goal.id, key, record, taskId: milestoneTasks(goal)[0].id };
+  });
+  await page.locator('.nav-item[data-view="milestones"]').click();
+  const card = page.locator(`[data-milestone-id="${target.id}"]`);
+  const record = card.locator(`[data-historical-review-key="${target.key}"]`);
+  const history = record.locator('xpath=ancestor::details[1]');
+  assert.equal(await history.evaluate(element => element.open), false, 'Historical details start collapsed');
+  await history.locator(':scope > summary').click();
+  assert.equal(await record.isVisible(), true);
+  assert.equal(await record.locator('input, textarea, button').count(), 0);
+  assert.equal(await card.locator('[data-milestone-review]').count(), 0);
+  await card.locator('.goal-next-task').click();
+  await page.locator('#taskDialog').waitFor({ state: 'visible' });
+  assert.equal(await page.evaluate(() => detailTaskId), target.taskId);
+  await page.locator('#taskHistoryBackBtn').click();
+  await page.locator('#taskDialog').waitFor({ state: 'hidden' });
   assert.equal(await page.locator('#milestonesView').isVisible(), true);
+  assert.equal(await history.evaluate(element => element.open), true, 'Back restores the expanded project history');
   await page.locator('#navigationForwardBtn').click();
-  await page.locator('#milestoneReviewDialog').waitFor({ state: 'visible' });
-  assert.equal(await page.evaluate(() => reviewMilestoneId), projectId);
-  assert.equal(await page.locator('#milestoneEvidence').inputValue(), '');
-  assert.equal(await page.evaluate(id => state.entries[`milestone:${id}`], projectId), undefined);
+  await page.locator('#taskDialog').waitFor({ state: 'visible' });
+  assert.equal(await page.evaluate(() => detailTaskId), target.taskId);
+  assert.deepEqual(await page.evaluate(key => state.entries[key], target.key), target.record,
+    'Reading or navigating a historical record cannot rewrite it');
 });
 
 test('mobile overview and milestone section jumps have reversible scroll and focus', { timeout: 30_000 }, async t => {
@@ -310,7 +364,7 @@ test('an in-flight practice save blocks Back and Escape until the default sessio
     saveState(); render();
   });
   await page.locator('#continue-track-ydy').click();
-  const record = page.locator('#continueBox [data-progress-action="record-session"]');
+  const record = page.locator('#todayBox [data-progress-action="record-session"], #continueBox [data-progress-action="record-session"]').first();
   const taskId = await record.locator('xpath=ancestor::*[@data-task-id][1]').getAttribute('data-task-id');
   assert.ok(taskId);
   await record.click();

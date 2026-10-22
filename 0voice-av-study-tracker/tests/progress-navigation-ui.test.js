@@ -88,9 +88,10 @@ const outlineIds = page => page.locator('#weekTasks .task-outline-item')
 test('zero-check-in totals open every scoped course or project task, including unfinished work', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
   const scopes = await page.evaluate(() => ({
-    courseYdy: allTasks.filter(task => task.track === 'ydy' && phaseForWeek(task.week).id === 'courses').map(task => task.id),
-    deepeningYdy: allTasks.filter(task => task.track === 'ydy' && phaseForWeek(task.week).id === 'projects').map(task => task.id),
-    yibo: DATA.milestones.find(goal => goal.id === 'yibo').taskIds
+    courseYdy: requiredTasks().filter(task => task.track === 'ydy' && phaseForWeek(task.week).id === 'courses').map(task => task.id),
+    career: requiredTasks().filter(task => task.track === 'review' && phaseForWeek(task.week).id === 'career').map(task => task.id),
+    yibo: [...DATA.milestones.find(goal => goal.id === 'yibo').taskIds]
+      .sort((left, right) => taskById.get(left).week - taskById.get(right).week)
   }));
   assert.equal(await page.locator('#progress-completed-ydy').isDisabled(), true);
   assert.equal(await page.locator('#progress-total-ydy').isDisabled(), false);
@@ -99,7 +100,7 @@ test('zero-check-in totals open every scoped course or project task, including u
   assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'courses', track: 'ydy', project: '' });
   assert.equal(await page.locator('#taskFilter').inputValue(), 'all');
   assert.deepEqual(await outlineIds(page), scopes.courseYdy);
-  assert.equal(await page.locator('#weekTasks .task-card').count(), 0, 'All-task outline should use its own readable rows');
+  assert.equal(await page.locator('#weekTasks .search-week-group .task-card').count(), 0, 'All-task outline should use its own readable rows');
 
   await page.locator('#navigationBackBtn').click();
   assert.equal(await page.locator('#overviewView').isVisible(), true);
@@ -119,11 +120,27 @@ test('zero-check-in totals open every scoped course or project task, including u
   assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'courses', track: 'ydy', project: 'yibo' });
   await page.locator('#navigationBackBtn').click();
   assert.equal(await page.locator('#overviewView').isVisible(), true);
-  await page.locator('#progress-phase-projects').click();
-  await page.locator('#progress-total-ydy').click();
-  assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'projects', track: 'ydy', project: '' });
-  assert.deepEqual(await outlineIds(page), scopes.deepeningYdy);
-  assert.ok(scopes.deepeningYdy.every(id => !scopes.courseYdy.includes(id)));
+  assert.equal(await page.locator('#progress-phase-projects').count(), 0);
+  await page.locator('#progress-phase-career').click();
+  await page.locator('#progress-total-review').click();
+  assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'career', track: 'review', project: '' });
+  assert.deepEqual(await outlineIds(page), scopes.career);
+  assert.equal(await page.locator('#weekTasks [data-career-board]').count(), 0,
+    'The career total keeps the complete global task outline');
+  assert.equal(await page.locator('#weekTasks .day-group').count(), 0,
+    'The total counts each material module once instead of repeating its dated learning sessions');
+  assert.ok(scopes.career.every(id => !scopes.courseYdy.includes(id)));
+  const workflow = await page.evaluate(() => DATA.careerWorkflow);
+  const teacherMeta = await page.locator(`#weekTasks [data-task-id="${workflow.teacherTaskId}"] .task-outline-meta`).textContent();
+  assert.match(teacherMeta, /老师.*确认.*无固定日期/);
+  assert.doesNotMatch(teacherMeta, /Invalid Date|undefined|NaN|0 分钟/);
+  const interviewMeta = await page.locator(`#weekTasks [data-task-id="${workflow.interviewTaskIds[0]}"] .task-outline-meta`).textContent();
+  assert.match(interviewMeta, /确认后.*第 1 次/);
+  assert.doesNotMatch(interviewMeta, /2027.*月.*日|Invalid Date|undefined|NaN/);
+  const remoteMeta = await page.locator('#weekTasks [data-task-id="career-teacher-v1-remote-interview"] .task-outline-meta').textContent();
+  assert.match(remoteMeta, /确认后.*第 5 次/);
+  assert.equal(workflow.preparationTaskIds.length, 7);
+  assert.equal(workflow.interviewTaskIds.length, 15);
 });
 
 test('project outline shows completion, partial work, pending tasks and their real lesson or practice details', { timeout: 30_000 }, async t => {
@@ -159,7 +176,7 @@ test('project outline shows completion, partial work, pending tasks and their re
 
   const videoDetails = page.locator(`#weekTasks details.task-outline-content[data-outline-task-id="${sample.pending}"]`);
   await page.locator('#outlineWeekSelect').selectOption(String(sample.videoWeek));
-  await videoDetails.locator('summary').click();
+  await videoDetails.locator(':scope > summary').click();
   const videoText = await videoDetails.textContent();
   for (const segment of sample.segments) {
     assert.ok(videoText.includes(segment.title), `Outline omits original lesson ${segment.title}`);
@@ -167,13 +184,17 @@ test('project outline shows completion, partial work, pending tasks and their re
   }
   const practiceDetails = page.locator(`#weekTasks details.task-outline-content[data-outline-task-id="${sample.partial}"]`);
   await page.locator('#outlineWeekSelect').selectOption(String(sample.practiceWeek));
-  await practiceDetails.locator('summary').click();
+  await practiceDetails.locator(':scope > summary').click();
   const practiceText = await practiceDetails.textContent();
   for (const item of [...sample.steps, ...sample.deliverables]) assert.ok(practiceText.includes(item), `Outline omits practice item ${item}`);
 
   const priorProgress = await page.evaluate(id => taskProgress(id), sample.partial);
   await page.locator(`#weekTasks [data-task-id="${sample.partial}"] .outline-check`).click();
+  await page.locator('#taskDialog').waitFor({ state: 'visible' });
+  assert.equal(await page.evaluate(() => detailTaskId), sample.partial, 'Module outlines open their output check before completion');
+  await page.locator('#detailToggleBtn').click();
   await page.waitForFunction(id => taskDone(id), sample.partial);
+  await page.locator('#closeTaskBtn').click();
   assert.match(await status(sample.partial), /已完成/);
   assert.deepEqual(await page.evaluate(id => taskProgress(id), sample.partial), priorProgress);
   await page.locator('#toastRegion .toast-action').click();
@@ -187,22 +208,22 @@ test('project outline shows completion, partial work, pending tasks and their re
   assert.equal(await page.locator('#weekTasks .task-outline-item').count(), 1);
 });
 
-test('Back and Forward preserve a deepening project outline and its expanded task details', { timeout: 30_000 }, async t => {
+test('Back and Forward preserve a course project outline and its expanded task details', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
-  const projectIds = await page.evaluate(() => DATA.milestones.find(goal => goal.id === 'studio-baseline').taskIds);
-  await page.locator('#progress-phase-projects').click();
+  const projectIds = await page.evaluate(() => [...DATA.milestones.find(goal => goal.id === 'studio-course').taskIds]
+    .sort((left, right) => taskById.get(left).week - taskById.get(right).week));
   await page.locator('#projectProgressDetails > summary').click();
-  await page.locator('#progress-project-total-studio-baseline').click();
+  await page.locator('#progress-project-total-studio-course').click();
   assert.deepEqual(await outlineIds(page), projectIds);
   const details = page.locator(`#weekTasks details.task-outline-content[data-outline-task-id="${projectIds[0]}"]`);
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   assert.equal(await details.getAttribute('open'), '');
   await page.locator('#navigationBackBtn').click();
   assert.equal(await page.locator('#overviewView').isVisible(), true);
-  assert.equal(await page.locator('#progress-phase-projects').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#progress-phase-courses').getAttribute('aria-pressed'), 'true');
   assert.equal(await page.locator('#projectProgressDetails').getAttribute('open'), '');
   await page.locator('#navigationForwardBtn').click();
-  assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'projects', track: 'ydy', project: 'studio-baseline' });
+  assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'courses', track: 'ydy', project: 'studio-course' });
   assert.equal(await page.locator('#taskFilter').inputValue(), 'all');
   assert.deepEqual(await outlineIds(page), projectIds);
   assert.equal(await details.getAttribute('open'), '', 'A task expanded in the outline remains expanded after history navigation');
@@ -216,7 +237,7 @@ test('completed source list includes every done course week and excludes other s
       earlyCourse: allTasks.find(task => task.track === 'ls' && task.week === 1).id,
       laterCourse: allTasks.find(task => task.track === 'ls' && task.week >= 10).id,
       courseProject: allTasks.find(task => task.track === 'ydy' && inPhase(task, 'courses')).id,
-      deepeningProject: allTasks.find(task => task.track === 'ydy' && inPhase(task, 'projects')).id
+      careerTask: allTasks.find(task => task.track === 'review' && inPhase(task, 'career')).id
     };
   });
   await markDone(page, Object.values(sample));
@@ -235,7 +256,7 @@ test('completed source list includes every done course week and excludes other s
   await page.locator('.nav-item[data-view="overview"]').click();
   await page.locator('#progress-completed-ydy').click();
   assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'courses', track: 'ydy', project: '' });
-  assert.deepEqual(await listedIds(page), [sample.courseProject], 'A course-phase project count must exclude deepening work');
+  assert.deepEqual(await listedIds(page), [sample.courseProject], 'A course-phase project count must exclude career work');
 });
 
 test('project completion list isolates one milestone and one phase, including cross-week tasks', { timeout: 30_000 }, async t => {
@@ -245,9 +266,9 @@ test('project completion list isolates one milestone and one phase, including cr
     const project = id => DATA.milestones.find(goal => goal.id === id);
     const yibo = project('yibo').taskIds;
     return {
-      firstYibo: yibo[0], laterYibo: yibo.find(id => byId(id).week >= 8),
+      firstYibo: yibo[0], laterYibo: yibo.at(-1),
       otherCourse: project('yunzhujiao').taskIds[0],
-      deepening: project('studio-baseline').taskIds[0]
+      careerTask: allTasks.find(task => task.track === 'review').id
     };
   });
   assert.ok(sample.laterYibo, 'The project fixture should cross several weeks');
@@ -262,7 +283,7 @@ test('project completion list isolates one milestone and one phase, including cr
   assert.deepEqual(await listedIds(page), [sample.firstYibo, sample.laterYibo]);
   assert.match(await page.locator('#progressListTitle').textContent(), /易播/);
   assert.ok(!(await listedIds(page)).includes(sample.otherCourse));
-  assert.ok(!(await listedIds(page)).includes(sample.deepening));
+  assert.ok(!(await listedIds(page)).includes(sample.careerTask));
 });
 
 test('removing an incorrect completion updates the list and count, and Undo restores both', { timeout: 30_000 }, async t => {
@@ -287,31 +308,33 @@ test('removing an incorrect completion updates the list and count, and Undo rest
   assert.match(await page.locator('#progress-completed-ls').textContent(), /2/);
 });
 
-test('Back and Forward restore the deepening project completion scope and expanded progress details', { timeout: 30_000 }, async t => {
+test('Back and Forward restore the course project completion scope and expanded progress details', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
-  const taskId = await page.evaluate(() => DATA.milestones.find(goal => goal.id === 'studio-baseline').taskIds[0]);
+  const taskId = await page.evaluate(() => DATA.milestones.find(goal => goal.id === 'studio-course').taskIds[0]);
   await markDone(page, [taskId]);
-  await page.locator('#progress-phase-projects').click();
   await page.locator('#projectProgressDetails > summary').click();
   const deepeningProjects = await page.locator('#projectProgressDetails [data-progress-project-id]')
     .evaluateAll(rows => rows.map(row => row.dataset.progressProjectId));
-  assert.deepEqual(deepeningProjects, ['studio-baseline', 'studio-rtc', 'studio-validation']);
-  await page.locator('#progress-project-completed-studio-baseline').click();
+  assert.deepEqual(deepeningProjects, ['yibo', 'yunzhujiao', 'studio-course']);
+  await page.locator('#progress-project-completed-studio-course').click();
   assert.deepEqual(await listedIds(page), [taskId]);
-  assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'projects', track: 'ydy', project: 'studio-baseline' });
+  assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'courses', track: 'ydy', project: 'studio-course' });
   await page.locator('#navigationBackBtn').click();
   assert.equal(await page.locator('#overviewView').isVisible(), true);
-  assert.equal(await page.locator('#progress-phase-projects').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#progress-phase-courses').getAttribute('aria-pressed'), 'true');
   assert.equal(await page.locator('#projectProgressDetails').getAttribute('open'), '');
   await page.locator('#navigationForwardBtn').click();
   assert.equal(await page.locator('#progressListContext').isVisible(), true);
-  assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'projects', track: 'ydy', project: 'studio-baseline' });
+  assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'courses', track: 'ydy', project: 'studio-course' });
   assert.deepEqual(await listedIds(page), [taskId]);
 });
 
 test('empty counts are disabled, source and project names jump to first unfinished task, and all-done project opens its list', { timeout: 30_000 }, async t => {
   const page = await pageAt(t);
-  for (const id of ['progress-completed-ls', 'progress-completed-ydy', 'progress-completed-review']) {
+  const emptyCountIds = await page.evaluate(() => [...new Set(allTasks
+    .filter(task => phaseForWeek(task.week).id === selectedProgressPhase).map(task => task.track))]
+    .map(track => `progress-completed-${track}`));
+  for (const id of emptyCountIds) {
     assert.equal(await page.locator(`#${id}`).isDisabled(), true, `${id} must not lead to an empty completion list`);
   }
   await page.locator('#progress-track-ls').click();
@@ -326,7 +349,8 @@ test('empty counts are disabled, source and project names jump to first unfinish
   const firstYibo = await page.evaluate(() => DATA.milestones.find(goal => goal.id === 'yibo').taskIds[0]);
   assert.equal(await page.locator(`#weekTasks [data-task-id="${firstYibo}"]`).isVisible(), true);
   await page.locator('#navigationBackBtn').click();
-  const allYibo = await page.evaluate(() => DATA.milestones.find(goal => goal.id === 'yibo').taskIds);
+  const allYibo = await page.evaluate(() => [...DATA.milestones.find(goal => goal.id === 'yibo').taskIds]
+    .sort((left, right) => taskById.get(left).week - taskById.get(right).week));
   await markDone(page, allYibo);
   await page.locator('#progress-project-yibo').click();
   assert.deepEqual(await page.evaluate(() => progressListScope), { phase: 'courses', track: 'ydy', project: 'yibo' });
@@ -346,7 +370,13 @@ test('expanded progress and completion list fit a 320px mobile viewport', { time
   await page.locator('#progress-project-total-yibo').click();
   assert.equal(await outlineIds(page).then(ids => ids.length),
     await page.evaluate(() => DATA.milestones.find(goal => goal.id === 'yibo').taskIds.length));
-  await page.locator(`#weekTasks details.task-outline-content[data-outline-task-id="${id}"] > summary`).click();
+  const week = await page.evaluate(id => taskById.get(id).week, id);
+  await page.locator('#outlineWeekSelect').selectOption(String(week));
+  const details = page.locator(`#weekTasks details.task-outline-content[data-outline-task-id="${id}"]`);
+  assert.equal(await details.locator(':scope > summary').isVisible(), true,
+    'The week locator exposes the completed task before its mobile details are expanded');
+  await details.locator(':scope > summary').click();
+  assert.equal(await details.getAttribute('open'), '');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
     'Expanded mobile outline should not overflow horizontally');
 });

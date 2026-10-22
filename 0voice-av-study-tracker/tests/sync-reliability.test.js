@@ -123,6 +123,44 @@ test('old SQLite rows migrate; offset timestamps, evidence, validation and backu
   } finally { backupDb.close(); }
 });
 
+test('merge and full restore roll back every write on a database failure and remain usable afterward', { timeout: 20_000 }, async t => {
+  const server = await startServer(t);
+  const baseline = {
+    original: { done: false, updatedAt: '2026-10-01T00:00:00.000Z', evidence: '保留原始记录',
+      progress: { kind: 'practice', completedSteps: [0], workedMinutes: 40, note: '原进度' } }
+  };
+  assert.equal((await sync(server.baseURL, baseline)).status, 200);
+  const connection = new DatabaseSync(server.dbPath);
+  try {
+    connection.exec(`
+      CREATE TRIGGER reject_test_write BEFORE INSERT ON task_entries
+      WHEN NEW.task_id = 'rejected'
+      BEGIN SELECT RAISE(ABORT, 'isolated write failure'); END;
+    `);
+    const attempted = {
+      original: { done: true, updatedAt: '2026-10-02T00:00:00.000Z', evidence: '不应覆盖原始证据',
+        progress: { kind: 'practice', completedSteps: [0, 1], workedMinutes: 80, note: '不应部分更新' } },
+      first: { done: true, updatedAt: '2026-10-02T00:00:00.000Z', evidence: '不应部分保存' },
+      rejected: { done: true, updatedAt: '2026-10-02T00:00:00.000Z', evidence: '' }
+    };
+    for (const mode of ['merge', 'replace']) {
+      const result = await sync(server.baseURL, attempted, mode);
+      assert.equal(result.status, 500, `${mode} reports the write failure`);
+      const restored = await (await fetch(`${server.baseURL}/api/state`)).json();
+      assert.deepEqual(restored.state.entries, baseline,
+        `${mode} must roll back earlier inserts and preserve the original rows, evidence and progress`);
+    }
+    connection.exec('DROP TRIGGER reject_test_write');
+    const recovered = await sync(server.baseURL, { first: attempted.first });
+    assert.equal(recovered.status, 200, 'The failed transaction must not block the next sync');
+    assert.deepEqual(recovered.body.state.entries, { ...baseline, first: attempted.first });
+    const replaced = await sync(server.baseURL, { rejected: attempted.rejected }, 'replace');
+    assert.equal(replaced.status, 200);
+    assert.deepEqual(replaced.body.state.entries, { rejected: attempted.rejected },
+      'A successful full restore still replaces every previous row');
+  } finally { connection.close(); }
+});
+
 test('browser rejects false sync success, retries transient failures and stops on 401', { timeout: 20_000 }, async t => {
   const server = await startServer(t);
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'],
